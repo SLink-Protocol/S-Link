@@ -1,0 +1,95 @@
+[*]
+[*] GTKWave Analyzer v3.3.105 (w)1999-2020 BSI
+[*] Mon Jul 13 18:04:33 2020
+[*]
+[dumpfile] "/home/steven/projects/S-Link/verif/run/dump.vcd"
+[dumpfile_mtime] "Mon Jul 13 17:51:53 2020"
+[dumpfile_size] 9588236
+[savefile] "/home/steven/projects/S-Link/verif/run/waveform_signals.gtkw"
+[timestart] 0
+[size] 2285 1092
+[pos] -1 -1
+*-29.723747 2055250000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] u_slink_MASTER.
+[treeopen] u_slink_MASTER.u_slink_ll_rx.
+[treeopen] u_slink_SLAVE.
+[treeopen] u_slink_SLAVE.u_slink_attributes.
+[treeopen] u_slink_SLAVE.u_slink_ll_rx.
+[sst_width] 363
+[signals_width] 660
+[sst_expanded] 1
+[sst_vpaned_height] 329
+@200
+-[MASTER] - Application Layer
+@28
+u_slink_MASTER.tx_sop
+@22
+u_slink_MASTER.tx_data_id[7:0]
+u_slink_MASTER.tx_word_count[15:0]
+u_slink_MASTER.tx_app_data[31:0]
+@28
+u_slink_MASTER.tx_advance
+@821
+[color] 7
+u_slink_MASTER.u_slink_ll_tx.state_name[320:1]
+@200
+-
+@28
+u_slink_MASTER.rx_sop
+@22
+u_slink_MASTER.rx_data_id[7:0]
+u_slink_MASTER.rx_word_count[15:0]
+u_slink_MASTER.rx_app_data[31:0]
+@28
+u_slink_MASTER.rx_valid
+@820
+[color] 7
+u_slink_MASTER.u_slink_ll_rx.state_name[320:1]
+@200
+-
+-[MASTER] - LTSSM 
+@820
+[color] 7
+u_slink_MASTER.u_slink_ltssm.state_name[320:1]
+@28
+u_slink_MASTER.slink_gpio_wake_n
+u_slink_MASTER.slink_gpio_reset_n
+@200
+-===================================
+-===================================
+-[SLAVE] - Application Layer
+@28
+u_slink_SLAVE.tx_sop
+@22
+u_slink_SLAVE.tx_data_id[7:0]
+u_slink_SLAVE.tx_word_count[15:0]
+u_slink_SLAVE.tx_app_data[31:0]
+@28
+u_slink_SLAVE.tx_advance
+@820
+[color] 7
+u_slink_SLAVE.u_slink_ll_tx.state_name[320:1]
+@200
+-
+@28
+u_slink_SLAVE.rx_sop
+@22
+u_slink_SLAVE.rx_data_id[7:0]
+u_slink_SLAVE.rx_word_count[15:0]
+u_slink_SLAVE.rx_app_data[31:0]
+@28
+u_slink_SLAVE.rx_valid
+@820
+[color] 7
+u_slink_SLAVE.u_slink_ll_rx.state_name[320:1]
+@200
+-
+-[SLAVE] - LTSSM
+@820
+[color] 7
+u_slink_SLAVE.u_slink_ltssm.state_name[320:1]
+@28
+u_slink_SLAVE.slink_gpio_wake_n
+u_slink_SLAVE.slink_gpio_reset_n
+[pattern_trace] 1
+[pattern_trace] 0
