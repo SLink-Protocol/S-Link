@@ -19,7 +19,7 @@ S-Link supports the following features:
 
 Documentation
 -------------
-`S-Link Documentation <s-link.readthedocs.io>`__ is hosted on ReadTheDocs.
+`S-Link Documentation <https://s-link.readthedocs.io>`__ is hosted on ReadTheDocs.
 
 Tools Required
 --------------
