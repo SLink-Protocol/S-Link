@@ -51,7 +51,8 @@ gtkwave
   sudo apt-get install -y tcl-dev tk-dev libbz2-dev liblzma-dev
   sudo apt-get install gtk2.0   (you may or may not want this
   ./configure
-  make sudo make install
+  sudo make install
+  
   which gtkwave
 
 
