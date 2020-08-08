@@ -17,6 +17,9 @@ S-Link supports the following features:
 * Parameterizable FIFO sizes for Deskew and AUX channels
 * Parameterizable pipeline stages to optimze for frequency and/or power
 
+Documentation
+-------------
+`S-Link Documentation <s-link.readthedocs.io>`__ is hosted on ReadTheDocs.
 
 Tools Required
 --------------
