@@ -17,6 +17,9 @@ S-Link supports the following features:
 * Parameterizable FIFO sizes for Deskew and AUX channels
 * Parameterizable pipeline stages to optimze for frequency and/or power
 
+Documentation
+-------------
+`S-Link Documentation <https://s-link.readthedocs.io>`__ is hosted on ReadTheDocs.
 
 Tools Required
 --------------
@@ -48,7 +51,8 @@ gtkwave
   sudo apt-get install -y tcl-dev tk-dev libbz2-dev liblzma-dev
   sudo apt-get install gtk2.0   (you may or may not want this
   ./configure
-  make sudo make install
+  sudo make install
+  
   which gtkwave
 
 
