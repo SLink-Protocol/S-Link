@@ -30,9 +30,10 @@ iverilog
 ++++++++
 ::
 
+  sudo apt-get install bison flex gperf autoconf g++
   git clone git://github.com/steveicarus/iverilog.git
-  sudo apt-get install bison flex gperf autoconf
-  sh autoconf.sh (if compiling from git)
+  cd iverilog
+  sh autoconf.sh #if compiling from git
   ./configure
   make
   sudo make install
@@ -45,13 +46,13 @@ gtkwave
 ::
 
   git clone https://github.com/gtkwave/gtkwave.git
-  cd gtkwave3 (pick your version)
+  cd gtkwave/gtkwave3 (pick your version)
 
   sudo apt-get update -y
   sudo apt-get install -y tcl-dev tk-dev libbz2-dev liblzma-dev
-  sudo apt-get install gtk2.0   (you may or may not want this
+  sudo apt-get install gtk2.0   #you may or may not want this
   ./configure
-  make sudo make install
+  sudo make install
   which gtkwave
 
 
