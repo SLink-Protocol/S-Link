@@ -31,9 +31,10 @@ iverilog
 ::
 
   sudo apt-get install bison flex gperf autoconf g++
+
   git clone git://github.com/steveicarus/iverilog.git
   cd iverilog
-  sh autoconf.sh #if compiling from git
+  sh autoconf.sh (if compiling from git)
   ./configure
   make
   sudo make install
@@ -44,15 +45,15 @@ iverilog
 gtkwave
 +++++++
 ::
-
-  git clone https://github.com/gtkwave/gtkwave.git
-  cd gtkwave/gtkwave3 (pick your version)
-
-  sudo apt-get update -y
   sudo apt-get install -y tcl-dev tk-dev libbz2-dev liblzma-dev
-  sudo apt-get install gtk2.0   #you may or may not want this
+  sudo apt-get install gtk2.0   # you may or may not want this
+  
+  git clone https://github.com/gtkwave/gtkwave.git
+  cd gtkwave/gtkwave3 # pick your version
+
   ./configure
   sudo make install
+  
   which gtkwave
 
 
@@ -60,6 +61,12 @@ gtkwave
 
   Verilator may be supported later, but due to serdes models it is unlikely.
 
+S-link Required
++++++++
+::
+  sudo apt-get install -y python3-pip python3-testresouces
+  cd S-Link
+  pip3 install -r requirements.txt
 
 Run your first sim
 ------------------
