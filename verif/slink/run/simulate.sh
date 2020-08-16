@@ -37,10 +37,6 @@ SLINK_TOP=../../..
 
 rm -rf $VVP_FILE
 
-#reg create
-#gen_regs_py -i $SLINK_TOP/rtl/regs/slink_ctrl_regs.txt -p slink -b ctrl -dv
-#mv slink_ctrl_addr_defines.vh ../tests
-
 
 #Compile
 iverilog -g2012 \
@@ -57,6 +53,7 @@ iverilog -g2012 \
   $SLINK_TOP/verif/slink/sub/slink_apb_driver.v \
   -I$SLINK_TOP/verif/slink/sub \
   -I$SLINK_TOP/verif/slink/tests \
+  -I$SLINK_TOP/verif/slink/tb_top \
   $compargs \
   -o slink_tb
   
