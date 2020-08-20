@@ -1,19 +1,19 @@
 `ifndef MAX_TX_LANES
-  `define MAX_TX_LANES 4
+  `define MAX_TX_LANES 8
 `endif
 
 `ifndef MAX_RX_LANES
-  `define MAX_RX_LANES 4
+  `define MAX_RX_LANES 8
 `endif
 
 
 
 `ifndef MST_PHY_DATA_WIDTH
-  `define MST_PHY_DATA_WIDTH 8
+  `define MST_PHY_DATA_WIDTH 16
 `endif
 
 `ifndef SLV_PHY_DATA_WIDTH
-  `define SLV_PHY_DATA_WIDTH 8
+  `define SLV_PHY_DATA_WIDTH 16
 `endif
 
 
@@ -147,7 +147,7 @@ bit pkt_type = 0;
 
 
 
-wire [7:0]            apb_paddr;
+wire [8:0]            apb_paddr;
 wire                  apb_pwrite;
 wire                  apb_psel;
 wire                  apb_penable;
@@ -156,7 +156,7 @@ wire [31:0]           apb_prdata;
 wire                  apb_pready;
 wire                  apb_pslverr;
 
-wire [7:0]            slv_apb_paddr;
+wire [8:0]            slv_apb_paddr;
 wire                  slv_apb_pwrite;
 wire                  slv_apb_psel;
 wire                  slv_apb_penable;

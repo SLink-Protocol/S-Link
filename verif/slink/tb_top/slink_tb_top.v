@@ -44,9 +44,9 @@ them with vvp. There are several flags to use for running.
 * ``-l <logname)`` - Name of log to print. Defaults to ``vvp.log``
 * ``-r`` - Regression flag. Not to be used during interactive sessions
 
-Waveforms are currently saved in .vcd format and can be opened with GtkWave. The gtkwave read file ``waveform_signals.gtkw`` 
-can be used to bring up a few signals. VCD filename is the standard ``dump.vcd`` iverilog uses.
-
+Waveforms are being saved in .lx2 format. (they were in .vcd, however the hierarchy in gtkwave had some issues and debugging
+was a pain. So it was changed to .lx2 and that seems to work better, although it's a little bit slower when running). 
+The gtkwave read file ``waveform_signals.gtkw`` can be used to bring up a few signals. LX2 filename is the standard ``dump.lx2`` iverilog uses.
 
 Testbench Defines
 -----------------

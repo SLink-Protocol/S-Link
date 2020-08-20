@@ -2,16 +2,16 @@ module slink_apb_driver #(
   parameter     ADDR_WIDTH  = 8,
   parameter     CLK_PER_NS  = 10
 )(
-  input  wire         apb_clk,
-  input  wire         apb_reset,
-  output reg  [7:0]   apb_paddr,
-  output reg          apb_pwrite,
-  output reg          apb_psel,
-  output reg          apb_penable,
-  output reg  [31:0]  apb_pwdata,
-  input  wire [31:0]  apb_prdata,
-  input  wire         apb_pready,
-  input  wire         apb_pslverr
+  input  wire                   apb_clk,
+  input  wire                   apb_reset,
+  output reg  [ADDR_WIDTH-1:0]  apb_paddr,
+  output reg                    apb_pwrite,
+  output reg                    apb_psel,
+  output reg                    apb_penable,
+  output reg  [31:0]            apb_pwdata,
+  input  wire [31:0]            apb_prdata,
+  input  wire                   apb_pready,
+  input  wire                   apb_pslverr
 );
 
 `include "slink_msg.v"

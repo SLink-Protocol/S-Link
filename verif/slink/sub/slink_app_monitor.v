@@ -26,6 +26,9 @@ module slink_app_monitor #(
 
 `include "slink_msg.v"
 
+bit disable_monitor = 0;
+
+
 bit [7:0] pkt[$];
 bit [7:0] pkt_array[$];
 
@@ -57,49 +60,52 @@ task monitorIntf;
 
   forever begin
     @(posedge link_clk);
-    
-    if(rx_sop && rx_valid) begin
-      //SOP
-      if(rx_data_id <= 'h1f) begin
-        //Short Packet
-        `sim_info($display("Short packet Received ID: %2h WC: %4h", rx_data_id, rx_word_count))
-        checkByte(rx_data_id);
-        checkByte(rx_word_count[ 7: 0]);
-        checkByte(rx_word_count[15: 8]);
-      end else begin
-        //Long Packet
-        checkByte(rx_data_id);
-        checkByte(rx_word_count[ 7: 0]);
-        checkByte(rx_word_count[15: 8]);
-        
-        `sim_info($display("Long packet Received ID: %2h WC: %4h", rx_data_id, rx_word_count))
-        
-        wc              = rx_word_count;
-        remaining_bytes = wc;
-        
+    if(~disable_monitor) begin
+      if(rx_sop && rx_valid) begin
+        //SOP
+        if(rx_data_id <= 'h1f) begin
+          //Short Packet
+          `sim_info($display("Short packet Received ID: %2h WC: %4h", rx_data_id, rx_word_count))
+          checkByte(rx_data_id);
+          checkByte(rx_word_count[ 7: 0]);
+          checkByte(rx_word_count[15: 8]);
+        end else begin
+          //Long Packet
+          checkByte(rx_data_id);
+          checkByte(rx_word_count[ 7: 0]);
+          checkByte(rx_word_count[15: 8]);
+
+          `sim_info($display("Long packet Received ID: %2h WC: %4h", rx_data_id, rx_word_count))
+
+          wc              = rx_word_count;
+          remaining_bytes = wc;
+
+          for(int i = 0; i < APP_DATA_WIDTH/8; i++) begin
+            if(remaining_bytes) begin
+              checkByte(rx_app_data[i*8 +: 8]);
+              remaining_bytes--;
+            end
+          end
+
+        end
+      end else if(~rx_sop && rx_valid) begin
+        //Rest of long data
         for(int i = 0; i < APP_DATA_WIDTH/8; i++) begin
           if(remaining_bytes) begin
             checkByte(rx_app_data[i*8 +: 8]);
             remaining_bytes--;
           end
         end
-        
-      end
-    end else if(~rx_sop && rx_valid) begin
-      if(rx_crc_corrupted) begin
-        `sim_error($display("CRC Corruption Seen!"))
-      end
-      //Rest of long data
-      for(int i = 0; i < APP_DATA_WIDTH/8; i++) begin
-        if(remaining_bytes) begin
-          checkByte(rx_app_data[i*8 +: 8]);
-          remaining_bytes--;
+        if(rx_crc_corrupted) begin
+          `sim_error($display("CRC Corruption Seen!"))
+          if(remaining_bytes != 0) begin
+            `sim_error($display("CRC Corruption Error seen when not on final cycle!"))
+          end
         end
+      end else if(rx_sop && ~rx_valid) begin
+        `sim_error($display("RX_SOP seen but RX_VALID not asserted!"))
       end
-    end else if(rx_sop && ~rx_valid) begin
-      `sim_error($display("RX_SOP seen but RX_VALID not asserted!"))
     end
-    
   end
 endtask
 

@@ -42,7 +42,7 @@ module slink_app_driver #(
   
   input  wire                        apb_clk,
   input  wire                        apb_reset,
-  output wire [7:0]                  apb_paddr,
+  output wire [8:0]                  apb_paddr,
   output wire                        apb_pwrite,
   output wire                        apb_psel,
   output wire                        apb_penable,
@@ -61,6 +61,22 @@ module slink_app_driver #(
 bit ignore_crc_corrupt_errors = 0;
 bit ignore_ecc_correct_errors = 0;
 bit ignore_ecc_corrupt_errors = 0;
+
+int crc_corrupt_count;
+int ecc_correct_count;
+int ecc_corrupt_count;
+
+bit disable_monitor = 0;
+
+task en_monitor;
+  disable_monitor =0;
+  monitor.disable_monitor=0;
+endtask
+
+task dis_monitor;
+  disable_monitor =1;
+  monitor.disable_monitor=1;
+endtask
 
 
 slink_app_monitor #(
@@ -167,9 +183,11 @@ task sendShortPacket(input bit[7:0] dataid, input bit[15:0] wc);
       end
     end while(~tx_ad);
     
-    monitor.addByte(dataid   );
-    monitor.addByte(wc[7 : 0]);
-    monitor.addByte(wc[15: 8]);
+    if(~disable_monitor) begin
+      monitor.addByte(dataid   );
+      monitor.addByte(wc[7 : 0]);
+      monitor.addByte(wc[15: 8]);
+    end
     
   end
   
@@ -214,12 +232,14 @@ task sendLongPacket(input bit [7:0] dataid, input bit [15:0] wc, input bit rando
   end else begin
   
     //push to monitor for check
-    monitor.addByte(dataid   );
-    monitor.addByte(wc[7 : 0]);
-    monitor.addByte(wc[15: 8]);
-    if(wc) begin
-      foreach(payload[i]) begin
-        monitor.addByte(payload[i]);
+    if(~disable_monitor) begin
+      monitor.addByte(dataid   );
+      monitor.addByte(wc[7 : 0]);
+      monitor.addByte(wc[15: 8]);
+      if(wc) begin
+        foreach(payload[i]) begin
+          monitor.addByte(payload[i]);
+        end
       end
     end
   
@@ -239,7 +259,7 @@ task sendLongPacket(input bit [7:0] dataid, input bit [15:0] wc, input bit rando
       end
     end
     curr_byte += DRIVER_APP_DATA_WIDTH/8;
-
+    
     while(~tx_advance) begin
       @(posedge link_clk);
     end
@@ -292,15 +312,24 @@ task monitorInterrupt;
     apb.read(`SLINK_CTRL_INTERRUPT_STATUS, val);
     
     if(val[`SLINK_CTRL_INTERRUPT_STATUS__ECC_CORRUPTED]) begin
-      `sim_error($display("ECC Corruption interrupt seen!"))
+      if(~ignore_ecc_corrupt_errors) begin
+        `sim_error($display("ECC Corruption interrupt seen!"))
+      end
+      ecc_corrupt_count++;
     end
     
     if(val[`SLINK_CTRL_INTERRUPT_STATUS__ECC_CORRECTED]) begin
-      `sim_error($display("ECC Corrected interrupt seen!"))
+      if(~ignore_ecc_correct_errors) begin
+        `sim_error($display("ECC Corrected iterrupt seen!"))
+      end
+      ecc_correct_count++;
     end
     
     if(val[`SLINK_CTRL_INTERRUPT_STATUS__CRC_CORRUPTED]) begin
-      `sim_error($display("CRC Corrupted interrupt seen!"))
+      if(~ignore_crc_corrupt_errors) begin
+        `sim_error($display("CRC Corrupted interrupt seen!"))
+      end
+      crc_corrupt_count++;
     end
     
     if(val[`SLINK_CTRL_INTERRUPT_STATUS__AUX_RX_FIFO_WRITE_FULL]) begin
@@ -319,7 +348,7 @@ endtask
                                                                        
 **********************************************************************************/
 
-slink_apb_driver apb (
+slink_apb_driver #(.ADDR_WIDTH(9)) apb (
   .apb_clk     ( apb_clk      ), 
   .apb_reset   ( apb_reset    ), 
   .apb_paddr   ( apb_paddr    ), 
@@ -436,18 +465,9 @@ endtask
 
 
 
-// task program_slink_attributes(
-//   input bit [2:0]   num_tx_lanes,
-//   input bit [2:0]   num_rx_lanes
-// );
-//   write_local_attr(ATTR_ACTIVE_TXS, num_tx_lanes);
-//   #100ns;
-//   write_local_attr(ATTR_ACTIVE_RXS, num_rx_lanes);
-//   
-//   update_local_effective;
-// endtask
-
-
+//-----------------------------
+// P State Changes
+//-----------------------------
 
 task enterP1;
   bit [31:0] val;
@@ -507,6 +527,136 @@ task set_slink_reset;
   apb.write(`SLINK_CTRL_PSTATE_CONTROL, val);
 endtask
 
+
+//-----------------------------
+// BIST
+//-----------------------------
+
+`include "slink_bist_addr_defines.vh"
+
+task program_bist(
+  input bit[3:0]  bist_mode_payload, 
+  input bit       bist_mode_wc,
+  input bit[15:0] bist_wc_min, 
+  input bit[15:0] bist_wc_max,
+  input bit       bist_mode_di,
+  input bit[ 7:0] bist_di_min, 
+  input bit[ 7:0] bist_di_max
+);
+
+  bit [31:0] val;
+  
+  apb.read('h100 + `SLINK_BIST_BIST_MODE, val);
+  val[`SLINK_BIST_BIST_MODE__BIST_MODE_PAYLOAD] = bist_mode_payload;
+  val[`SLINK_BIST_BIST_MODE__BIST_MODE_WC]      = bist_mode_wc;
+  val[`SLINK_BIST_BIST_MODE__BIST_MODE_DI]      = bist_mode_di;
+  apb.write('h100 + `SLINK_BIST_BIST_MODE, val);
+  
+  
+  apb.read('h100 + `SLINK_BIST_BIST_WORD_COUNT_VALUES, val);
+  val[`SLINK_BIST_BIST_WORD_COUNT_VALUES__BIST_WC_MIN]  = bist_wc_min;
+  val[`SLINK_BIST_BIST_WORD_COUNT_VALUES__BIST_WC_MAX]  = bist_wc_max;
+  apb.write('h100 + `SLINK_BIST_BIST_WORD_COUNT_VALUES, val);
+
+  apb.read('h100 + `SLINK_BIST_BIST_DATA_ID_VALUES, val);
+  val[`SLINK_BIST_BIST_DATA_ID_VALUES__BIST_DI_MIN]     = bist_di_min;
+  val[`SLINK_BIST_BIST_DATA_ID_VALUES__BIST_DI_MIN]     = bist_di_max;
+  apb.write('h100 + `SLINK_BIST_BIST_DATA_ID_VALUES, val);
+
+endtask
+
+task clr_bist_swreset;
+  bit [31:0] val;
+  
+  apb.read('h100 + `SLINK_BIST_SWRESET, val);
+  val[`SLINK_BIST_SWRESET__SWRESET] = 0;
+  apb.write('h100 + `SLINK_BIST_SWRESET, val);
+endtask
+
+task set_bist_active;
+  bit [31:0] val;
+  
+  apb.read('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+  val[`SLINK_BIST_BIST_MAIN_CONTROL__BIST_ACTIVE] = 1;
+  apb.write('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+endtask
+
+task disable_bist_active;
+  bit [31:0] val;
+  
+  apb.read('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+  val[`SLINK_BIST_BIST_MAIN_CONTROL__BIST_ACTIVE] = 0;
+  apb.write('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+endtask
+
+task en_bist_tx;
+  bit [31:0] val;
+    
+  apb.read('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+  val[`SLINK_BIST_BIST_MAIN_CONTROL__BIST_TX_EN]     = 1;
+  apb.write('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+
+endtask
+
+task disable_bist_tx;
+  bit [31:0] val;
+  
+  apb.read('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+  val[`SLINK_BIST_BIST_MAIN_CONTROL__BIST_TX_EN]     = 0;
+  apb.write('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+
+endtask
+
+task en_bist_rx;
+  bit [31:0] val;
+    
+  apb.read('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+  val[`SLINK_BIST_BIST_MAIN_CONTROL__BIST_RX_EN]     = 1;
+  apb.write('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+
+endtask
+
+task disable_bist_rx;
+  bit [31:0] val;
+  
+  apb.read('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+  val[`SLINK_BIST_BIST_MAIN_CONTROL__BIST_RX_EN]     = 0;
+  apb.write('h100 + `SLINK_BIST_BIST_MAIN_CONTROL, val);
+
+endtask
+
+
+task check_bist_locked;
+  bit [31:0] val;
+  
+  apb.read('h100 + `SLINK_BIST_BIST_STATUS, val);
+  
+  if(val[`SLINK_BIST_BIST_STATUS__BIST_LOCKED]) begin
+    `sim_info($display("Bist locked seen"))
+  end else begin
+    `sim_error($display("Bist locked NOT seen"))
+    if(val[`SLINK_BIST_BIST_STATUS__BIST_UNRECOVER]) begin
+      `sim_error($display("Bist un-recoverable situation seen"))
+    end
+  end
+endtask
+
+
+task check_bist_errors(input bit[15:0] exp_errors = 0);
+  bit [31:0] val;
+  bit [15:0] bist_errors;
+  
+  apb.read('h100 + `SLINK_BIST_BIST_STATUS, val);
+  
+  bist_errors = val[`SLINK_BIST_BIST_STATUS__BIST_ERRORS];
+  
+  if(bist_errors == exp_errors) begin
+    `sim_info($display("Expected %0d errors and saw %0d errors", exp_errors, bist_errors))
+  end else begin
+    `sim_error($display("Expected %0d errors and saw %0d errors", exp_errors, bist_errors))
+  end
+  
+endtask
 
 endmodule
 

@@ -63,8 +63,10 @@ task slink_test_select;
     "link_width_change"       : link_width_change;
     "slink_force_reset"       : slink_force_reset;
     "slink_force_hard_reset"  : slink_force_hard_reset;
+    "bist_test"               : bist_test;
     
-    //"ecc_correction"          : ecc_correction;
+    "ecc_correction"          : ecc_correction;
+    "ecc_corruption"          : ecc_corruption;
     default                   : sanity_test;
   endcase
   
@@ -106,11 +108,17 @@ task sanity_test;
   driver_m2s.sendLongPacket('h22, 3);
   #10ns;
   driver_m2s.sendLongPacket('h22, 4);
+  driver_m2s.sendLongPacket('h22, 5);
   
   #10ns;
-  for(int i = 1; i < 25; i++) begin
+  driver_m2s.sendLongPacket('h22, 16);
+  driver_m2s.sendLongPacket('h22, 17);
+  driver_m2s.sendLongPacket('h22, 18);
+  
+  #10ns;
+  for(int i = 1; i < 53; i++) begin
     driver_m2s.sendLongPacket('h22, i);
-    #10ns;
+    #1ps;
   end
   
 
@@ -378,7 +386,7 @@ task slink_force_hard_reset;
   //Perform hard reset  
   driver_m2s.set_slink_reset;
   
-  #(cfg.hard_reset_time_us * 1ns);
+  #((cfg.hard_reset_time_us+1) * 1us);
   
   // See if the attributes were reset MAKE THIS BETTER)
   driver_m2s.read_local_attr   (ATTR_P1_TS1_TX, val);
@@ -402,6 +410,68 @@ endtask
 
 
 /**********************************************************************************
+  ___   ___   ___   _____ 
+ | _ ) |_ _| / __| |_   _|
+ | _ \  | |  \__ \   | |  
+ |___/ |___| |___/   |_|  
+                          
+**********************************************************************************/
+task bist_test;
+  
+  fork
+    driver_m2s.sendRandomShortPacket;
+    driver_s2m.sendRandomShortPacket;
+  join
+  fork
+    driver_m2s.sendRandomLongPacket;
+    driver_s2m.sendRandomLongPacket;
+  join 
+  
+  cfg.randomize_cfg;
+  
+  #100ns;
+  
+  driver_m2s.clr_bist_swreset;
+  driver_s2m.clr_bist_swreset;
+  
+  driver_m2s.set_bist_active;
+  driver_s2m.set_bist_active;
+  
+  driver_m2s.program_bist('d9,
+                          'd1,
+                          'h10,
+                          'h30,
+                          'd1,
+                          'h20,
+                          'h30);
+  driver_s2m.program_bist('d8,
+                          'd1,
+                          'h10,
+                          'h30,
+                          'd1,
+                          'h20,
+                          'h30);
+  driver_m2s.en_bist_rx;
+  driver_s2m.en_bist_rx;
+  
+  #250ns;
+  
+  driver_m2s.en_bist_tx;
+  driver_s2m.en_bist_tx;
+  
+  #250ns;
+  
+  driver_m2s.check_bist_locked;
+  driver_s2m.check_bist_locked;
+  
+  #10us;
+  driver_m2s.check_bist_errors;
+  driver_s2m.check_bist_errors;
+  
+endtask
+
+
+/**********************************************************************************
   ___                             ___            _              _     _              
  | __|  _ _   _ _   ___   _ _    |_ _|  _ _     (_)  ___   __  | |_  (_)  ___   _ _  
  | _|  | '_| | '_| / _ \ | '_|    | |  | ' \    | | / -_) / _| |  _| | | / _ \ | ' \ 
@@ -409,28 +479,169 @@ endtask
                                               |__/                                  
 **********************************************************************************/
 
-// task ecc_correction;
-//   reg [(NUM_TX_LANES*8)-1:0] bit_corrupt;
-//   reg [(NUM_TX_LANES*8)-1:0] orig_bit_val;
-//   
-//   //For now just corrupting a single bit in lane0
-//   fork
-//     begin
-//       driver_m2s.sendRandomShortPacket;
-//     end
-//     begin
-//       wait((u_slink_MASTER.u_slink_ll_tx.state == 'd1) && 
-//            (u_slink_MASTER.u_slink_ll_tx.sop == 1'b1)); //wait for it to not be idle
-//       #1ps;
-//       bit_corrupt   = 0 + {$urandom} % (8 - 0);
-//       orig_bit_val  = u_slink_MASTER.u_slink_ll_tx.link_data_reg_in;
-//       bit_corrupt   = orig_bit_val ^ (1 << bit_corrupt);
-//       `sim_info($display("old: %2h new: %2h", orig_bit_val, bit_corrupt))
-//       force u_slink_MASTER.u_slink_ll_tx.link_data_reg_in = bit_corrupt;
-//       @(posedge u_slink_MASTER.u_slink_ll_tx.clk);
-//       release u_slink_MASTER.u_slink_ll_tx.link_data_reg_in;
-//     end
-//   join
-//   
-//   #50us;
-// endtask
+/****************************************
+.rst_start
+ecc_correction
+++++++++++++++
+Corrupts one of the Packet Header, looks to see if this error
+was seen in the monitor. The receiving side should have receieved the
+packet with no errors since one bit error should be resolvable.
+.rst_end
+/*****************************************/
+task ecc_correction;
+  reg [(NUM_TX_LANES*MST_PHY_DATA_WIDTH)-1:0] bit_corrupt;
+  
+  driver_s2m.ignore_ecc_correct_errors = 1;
+  
+  fork
+    begin
+      driver_m2s.sendRandomShortPacket;
+    end
+    begin
+      wait((u_slink_MASTER.u_slink_ll_tx.state == 'd1) && 
+           (u_slink_MASTER.u_slink_ll_tx.sop == 1'b1) &&
+           (u_slink_MASTER.u_slink_ll_tx.delim_start == 1'b1)); //wait for it to not be idle
+      #1ps;
+
+      bit_corrupt = ph_err_inj(u_slink_MASTER.u_slink_ll_tx.link_data_reg_in, 0);
+      force u_slink_MASTER.u_slink_ll_tx.link_data_reg_in = bit_corrupt;
+      @(posedge u_slink_MASTER.u_slink_ll_tx.clk);
+      release u_slink_MASTER.u_slink_ll_tx.link_data_reg_in;
+      
+    end
+  join
+  
+  #1us;
+  
+  if(driver_s2m.ecc_correct_count != 1) begin
+    `sim_info($display("ECC Correction was not seen in the montior!"))
+  end
+  
+  //Try to send normal data
+  driver_m2s.sendRandomShortPacket;
+  driver_m2s.sendRandomLongPacket;
+endtask
+
+
+/****************************************
+.rst_start
+ecc_corruption
+++++++++++++++
+Corrupts two bits of the Packet Header, looks to see if this error
+was seen in the monitor. Allows the link to reset then checks to 
+see if a valid packet can be sent to indicate recovery.
+.rst_end
+/*****************************************/
+task ecc_corruption;
+  reg [(NUM_TX_LANES*MST_PHY_DATA_WIDTH)-1:0] bit_corrupt;
+  
+  driver_s2m.ignore_ecc_corrupt_errors = 1;
+  driver_m2s.dis_monitor;
+  driver_s2m.dis_monitor;
+  
+  fork
+    begin
+      driver_m2s.sendRandomShortPacket;
+    end
+    begin
+      wait((u_slink_MASTER.u_slink_ll_tx.state == 'd1) && 
+           (u_slink_MASTER.u_slink_ll_tx.sop == 1'b1) &&
+           (u_slink_MASTER.u_slink_ll_tx.delim_start == 1'b1)); //wait for it to not be idle
+      #1ps;
+
+      bit_corrupt = ph_err_inj(u_slink_MASTER.u_slink_ll_tx.link_data_reg_in, 1);
+      force u_slink_MASTER.u_slink_ll_tx.link_data_reg_in = bit_corrupt;
+      @(posedge u_slink_MASTER.u_slink_ll_tx.clk);
+      release u_slink_MASTER.u_slink_ll_tx.link_data_reg_in;
+      
+    end
+  join
+  
+  #1us;
+  
+  if(driver_s2m.ecc_corrupt_count != 1) begin
+    `sim_info($display("ECC Corruption was not seen in the montior!"))
+  end
+  
+  //Try to send a packet with no error to see recovery
+  driver_s2m.ignore_ecc_corrupt_errors = 0;
+  driver_m2s.en_monitor;
+  driver_s2m.en_monitor;
+  
+  driver_m2s.sendRandomShortPacket;
+  driver_m2s.sendRandomLongPacket;
+  
+endtask
+
+
+
+function bit[(NUM_TX_LANES*MST_PHY_DATA_WIDTH)-1:0] ph_err_inj;
+  input [(NUM_TX_LANES*MST_PHY_DATA_WIDTH)-1:0] ph_orig;
+  input                                         corr;     //0 - 1bit, 1 - 2 bits
+  
+  reg [(NUM_TX_LANES*MST_PHY_DATA_WIDTH)-1:0] bit_corrupt;
+  
+  case(NUM_TX_LANES)
+    1 : begin
+      case(MST_PHY_DATA_WIDTH)
+        8  : bit_corrupt   = 0 + {$urandom} % ((8-corr) - 0);
+        16 : bit_corrupt   = 0 + {$urandom} % ((16-corr) - 0);
+        32 : bit_corrupt   = 0 + {$urandom} % ((32-corr) - 0);
+      endcase
+    end
+
+    2 : begin
+      case(MST_PHY_DATA_WIDTH)
+        8  : bit_corrupt   = 0 + {$urandom} % ((16-corr) - 0);
+        16 : bit_corrupt   = 0 + {$urandom} % ((32-corr) - 0);
+        32 : begin
+          case($urandom % 4) //ph byte select
+            0,2 : bit_corrupt   = 0  + {$urandom} % ((16-corr) - 0);
+            1,3 : bit_corrupt   = 32 + {$urandom} % ((48-corr) - 32);
+          endcase
+        end
+      endcase
+    end
+
+    default : begin
+      case(MST_PHY_DATA_WIDTH)
+        8  : bit_corrupt   = 0 + {$urandom} % ((32-corr) - 0);
+        16 : begin
+          case($urandom % 4) //ph byte select
+            0 : bit_corrupt   = 0  + {$urandom} % ((8-corr) - 0);
+            1 : bit_corrupt   = 16 + {$urandom} % ((24-corr) - 16);
+            2 : bit_corrupt   = 32 + {$urandom} % ((40-corr) - 32);
+            3 : bit_corrupt   = 48 + {$urandom} % ((56-corr) - 48);
+          endcase
+        end
+        32 : begin
+          case($urandom % 4) //ph byte select
+            0 : bit_corrupt   = 0  + {$urandom} % ((8-corr) - 0);
+            1 : bit_corrupt   = 32 + {$urandom} % ((40-corr) - 32);
+            2 : bit_corrupt   = 64 + {$urandom} % ((72-corr) - 64);
+            3 : bit_corrupt   = 96 + {$urandom} % ((104-corr) - 96);
+          endcase
+        end
+      endcase
+    end
+  endcase
+  
+  if(corr) begin
+    `sim_info($display("Bits [%0d:%0d] of the Packet Header will be corrupted", bit_corrupt+1, bit_corrupt))
+  end else begin
+    `sim_info($display("Bit %0d of the Packet Header will be corrupted", bit_corrupt))
+  end
+  
+  
+  
+  if(corr) begin
+    bit_corrupt   = ph_orig ^ (3 << bit_corrupt);
+  end else begin
+    bit_corrupt   = ph_orig ^ (1 << bit_corrupt);
+  end
+  
+  `sim_info($display("Original Packet Header: %h  New: %h", ph_orig, bit_corrupt))
+  
+  ph_err_inj = bit_corrupt;
+  
+endfunction

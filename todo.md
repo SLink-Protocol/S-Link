@@ -5,6 +5,9 @@
 - [ ] Decide if we want to be able to send a *minimum* number of Px Request and Px Start packets before moving
 
 - [ ] Can we remove the crc_valid settings for end of cycles in the LL (TX and RX)? Does this really save any logic?
+- [ ] Remove the byte_count app data selection for first cycle since it would always be indexed to 0. Might be creating unneccesary logic
+- [ ] For some the cases where we have app_data_saved (4lane@16bit, 8lane, etc.) I need to move the app_data_reg_in to a valid_in check
+
 - [ ] Is there a *clean* way to use for loops to clean up the code in the LL for bit indexing
 - [ ] Add in a parameter to rip out the CRC logic and replace with just 0xffff.
 

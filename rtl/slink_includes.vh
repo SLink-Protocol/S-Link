@@ -56,3 +56,14 @@ localparam    ATTR_MAX_TXS    = 16'h0,
               ATTR_P3R_TS1_RX  = 16'h29,
               ATTR_P3R_TS2_TX  = 16'h2a,
               ATTR_P3R_TS2_RX  = 16'h2b;
+
+
+
+localparam    BIST_PAYLOAD_1010       = 4'h0,
+              BIST_PAYLOAD_1100       = 4'h1,
+              BIST_PAYLOAD_1111_0000  = 4'h2,
+              BIST_PAYLOAD_COUNT      = 4'h8,
+              BIST_PAYLOAD_PRBS9      = 4'h9,
+              BIST_PAYLOAD_PRBS11     = 4'ha,
+              BIST_PAYLOAD_PRBS18     = 4'hb;
+

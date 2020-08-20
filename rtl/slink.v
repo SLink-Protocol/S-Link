@@ -5,19 +5,17 @@ module slink #(
   parameter     TX_APP_DATA_WIDTH         = (NUM_TX_LANES * PHY_DATA_WIDTH),
   parameter     RX_APP_DATA_WIDTH         = (NUM_RX_LANES * PHY_DATA_WIDTH),
   parameter     DESKEW_FIFO_DEPTH         = 4,
-  parameter     LTSSM_REGISTER_TXDATA     = 1
+  parameter     LTSSM_REGISTER_TXDATA     = 1,
+  parameter     INCLUDE_BIST              = 1
 )(
   input  wire                                     core_scan_mode,
   input  wire                                     core_scan_clk,
   input  wire                                     core_scan_asyncrst_ctrl,
-  
-  //TEMP!!!
-  //input  wire main_reset,
-  
+    
   // Control/Status Registers
   input  wire                                     apb_clk,
   input  wire                                     apb_reset,
-  input  wire [7:0]                               apb_paddr,
+  input  wire [8:0]                               apb_paddr,
   input  wire                                     apb_pwrite,
   input  wire                                     apb_psel,
   input  wire                                     apb_penable,
@@ -209,6 +207,17 @@ wire          swi_crc_corrupted_causes_reset;
 wire  [9:0]   swi_count_val_1us;
 
 
+wire                          ll_tx_sop;
+wire [7:0]                    ll_tx_data_id;
+wire [15:0]                   ll_tx_word_count;
+wire [TX_APP_DATA_WIDTH-1:0]  ll_tx_app_data;
+wire                          ll_tx_advance;
+wire                          ll_rx_sop;
+wire [7:0]                    ll_rx_data_id;
+wire [15:0]                   ll_rx_word_count;
+wire [RX_APP_DATA_WIDTH-1:0]  ll_rx_app_data;
+wire                          ll_rx_valid;
+wire                          ll_rx_crc_corrupted;
 
 
 slink_clk_control u_slink_clk_control (
@@ -229,7 +238,6 @@ slink_clk_control u_slink_clk_control (
   .link_clk_reset              ( link_clk_reset               )); 
 
 assign link_reset = link_clk_reset;
-
 
 
 //-------------------------------------------
@@ -269,12 +277,12 @@ slink_ll_tx #(
   .apb_clk                  ( apb_clk_scan                        ),
   .apb_reset                ( apb_reset_scan                      ),
   
-  .sop                      ( tx_sop                              ),  
-  .data_id                  ( tx_data_id                          ),  
-  .word_count               ( tx_word_count                       ),  
-  .app_data                 ( tx_app_data                         ),  
+  .sop                      ( ll_tx_sop                           ),  
+  .data_id                  ( ll_tx_data_id                       ),  
+  .word_count               ( ll_tx_word_count                    ),  
+  .app_data                 ( ll_tx_app_data                      ),  
   .valid                    ( 1'b0                                ),  
-  .advance                  ( tx_advance                          ),  
+  .advance                  ( ll_tx_advance                       ),  
   
   .delimeter                ( tempsig/*temp*/   ),
   
@@ -319,13 +327,13 @@ slink_ll_rx #(
   .reset                              ( link_clk_reset                      ),  
   .apb_clk                            ( apb_clk_scan                        ),
   .apb_reset                          ( apb_reset_scan                      ),
-  .sop                                ( rx_sop                              ),  
-  .data_id                            ( rx_data_id                          ),  
-  .word_count                         ( rx_word_count                       ),  
-  .app_data                           ( rx_app_data                         ),  
-  .valid                              ( rx_valid                            ),  
+  .sop                                ( ll_rx_sop                           ),  
+  .data_id                            ( ll_rx_data_id                       ),  
+  .word_count                         ( ll_rx_word_count                    ),  
+  .app_data                           ( ll_rx_app_data                      ),  
+  .valid                              ( ll_rx_valid                         ),  
   .active_lanes                       ( attr_active_rxs                     ),  
-  .delimeter                ( tempsig/*temp*/   ),
+  .delimeter                          ( tempsig/*temp*/   ),
   
   .swi_allow_ecc_corrected            ( swi_allow_ecc_corrected             ),
   .swi_ecc_corrected_causes_reset     ( swi_ecc_corrected_causes_reset      ),
@@ -336,7 +344,7 @@ slink_ll_rx #(
   
   .ecc_corrected                      ( ecc_corrected_link_clk              ),  
   .ecc_corrupted                      ( ecc_corrupted_link_clk              ),  
-  .crc_corrupted                      ( rx_crc_corrupted                    ),
+  .crc_corrupted                      ( ll_rx_crc_corrupted                 ),
   .aux_fifo_write_full_err            ( aux_fifo_write_full_err_link_clk    ),
   
   .external_link_reset_condition      ( link_reset_req                      ),
@@ -570,6 +578,46 @@ assign interrupt = (w1c_out_ecc_corrupted           && swi_ecc_corrupted_int_en)
                    (w1c_out_in_pstate               && swi_in_pstate_int_en)              ||
                    (w1c_out_aux_rx_fifo_write_full  && swi_aux_rx_fifo_write_full_int_en);
 
+
+
+// ABP Decode
+localparam  APB_CTRL = 1'b0,
+            APB_BIST = 1'b1;
+
+wire [7:0]  apb_paddr_ctrl;
+wire        apb_pwrite_ctrl;
+wire        apb_psel_ctrl;
+wire        apb_penable_ctrl;
+wire [31:0] apb_pwdata_ctrl;
+wire [31:0] apb_prdata_ctrl;
+wire        apb_pready_ctrl;
+wire        apb_pslverr_ctrl;
+
+wire [7:0]  apb_paddr_bist;
+wire        apb_pwrite_bist;
+wire        apb_psel_bist;
+wire        apb_penable_bist;
+wire [31:0] apb_pwdata_bist;
+wire [31:0] apb_prdata_bist;
+wire        apb_pready_bist;
+wire        apb_pslverr_bist;
+
+assign apb_paddr_ctrl   = apb_paddr[7:0];
+assign apb_pwrite_ctrl  = (apb_paddr[8] == APB_CTRL) && apb_pwrite;
+assign apb_psel_ctrl    = (apb_paddr[8] == APB_CTRL) && apb_psel;
+assign apb_penable_ctrl = (apb_paddr[8] == APB_CTRL) && apb_penable;
+assign apb_pwdata_ctrl  = apb_pwdata;
+
+assign apb_paddr_bist   = apb_paddr[7:0];
+assign apb_pwrite_bist  = (apb_paddr[8] == APB_BIST) && apb_pwrite;
+assign apb_psel_bist    = (apb_paddr[8] == APB_BIST) && apb_psel;
+assign apb_penable_bist = (apb_paddr[8] == APB_BIST) && apb_penable;
+assign apb_pwdata_bist  = apb_pwdata;
+
+assign apb_prdata       = (apb_paddr[8] == APB_CTRL) ? apb_prdata_ctrl  : apb_prdata_bist;
+assign apb_prready      = (apb_paddr[8] == APB_CTRL) ? apb_pready_ctrl  : apb_pready_bist;
+assign apb_pslverr      = (apb_paddr[8] == APB_CTRL) ? apb_pslverr_ctrl : apb_pslverr_bist;
+
 slink_ctrl_regs_top u_slink_ctrl_regs_top (
   .swi_swreset                             ( swi_swreset                              ),             
   .swi_enable                              ( swi_enable                               ), 
@@ -640,14 +688,102 @@ slink_ctrl_regs_top u_slink_ctrl_regs_top (
   .debug_bus_ctrl_status                   (                                          ),      
   .RegReset                                ( apb_reset_scan                           ),      
   .RegClk                                  ( apb_clk_scan                             ),      
-  .PSEL                                    ( apb_psel                                 ),      
-  .PENABLE                                 ( apb_penable                              ),      
-  .PWRITE                                  ( apb_pwrite                               ),      
-  .PSLVERR                                 ( apb_pslverr                              ),      
-  .PREADY                                  ( apb_pready                               ),      
-  .PADDR                                   ( apb_paddr                                ),      
-  .PWDATA                                  ( apb_pwdata                               ),      
-  .PRDATA                                  ( apb_prdata                               ));     
+  .PSEL                                    ( apb_psel_ctrl                            ),      
+  .PENABLE                                 ( apb_penable_ctrl                         ),      
+  .PWRITE                                  ( apb_pwrite_ctrl                          ),      
+  .PSLVERR                                 ( apb_pslverr_ctrl                         ),      
+  .PREADY                                  ( apb_pready_ctrl                          ),      
+  .PADDR                                   ( apb_paddr_ctrl                           ),      
+  .PWDATA                                  ( apb_pwdata_ctrl                          ),      
+  .PRDATA                                  ( apb_prdata_ctrl                          ));     
+
+
+
+generate
+  if(INCLUDE_BIST) begin : gen_include_bist
+    wire                          bist_active;
+    wire                          bist_tx_sop;
+    wire [7:0]                    bist_tx_data_id;
+    wire [15:0]                   bist_tx_word_count;
+    wire [TX_APP_DATA_WIDTH-1:0]  bist_tx_app_data;
+    wire                          bist_tx_advance;
+    wire                          bist_rx_sop;
+    wire [7:0]                    bist_rx_data_id;
+    wire [15:0]                   bist_rx_word_count;
+    wire [RX_APP_DATA_WIDTH-1:0]  bist_rx_app_data;
+    wire                          bist_rx_valid;
+  
+    slink_bist #(
+      .TX_APP_DATA_WIDTH     ( TX_APP_DATA_WIDTH ),
+      .RX_APP_DATA_WIDTH     ( RX_APP_DATA_WIDTH )
+    ) u_slink_bist (
+      .core_scan_mode              ( core_scan_mode               ),            
+      .core_scan_clk               ( core_scan_clk                ),            
+      .core_scan_asyncrst_ctrl     ( core_scan_asyncrst_ctrl      ),            
+      .link_clk                    ( link_clk                     ),            
+      .link_clk_reset              ( link_reset                   ),            
+      .apb_clk                     ( apb_clk_scan                 ), 
+      .apb_reset                   ( apb_reset_scan               ), 
+      .apb_paddr                   ( apb_paddr_bist               ), 
+      .apb_pwrite                  ( apb_pwrite_bist              ), 
+      .apb_psel                    ( apb_psel_bist                ), 
+      .apb_penable                 ( apb_penable_bist             ), 
+      .apb_pwdata                  ( apb_pwdata_bist              ), 
+      .apb_prdata                  ( apb_prdata_bist              ), 
+      .apb_pready                  ( apb_pready_bist              ), 
+      .apb_pslverr                 ( apb_pslverr_bist             ),  
+      .bist_active                 ( bist_active                  ),  
+      .tx_sop                      ( bist_tx_sop                  ),  
+      .tx_data_id                  ( bist_tx_data_id              ),  
+      .tx_word_count               ( bist_tx_word_count           ),  
+      .tx_app_data                 ( bist_tx_app_data             ),           
+      .tx_advance                  ( bist_tx_advance              ),  
+      .rx_sop                      ( bist_rx_sop                  ),  
+      .rx_data_id                  ( bist_rx_data_id              ),  
+      .rx_word_count               ( bist_rx_word_count           ),  
+      .rx_app_data                 ( bist_rx_app_data             ),       
+      .rx_valid                    ( bist_rx_valid                )); 
+    
+    assign ll_tx_sop        = bist_active ? bist_tx_sop         : tx_sop;
+    assign ll_tx_data_id    = bist_active ? bist_tx_data_id     : tx_data_id;
+    assign ll_tx_word_count = bist_active ? bist_tx_word_count  : tx_word_count;
+    assign ll_tx_app_data   = bist_active ? bist_tx_app_data    : tx_app_data;
+    assign tx_advance       = bist_active ? 1'b0                : ll_tx_advance;
+    assign bist_tx_advance  = ll_tx_advance;
+    
+    assign rx_sop           = bist_active ? 1'b0 : ll_rx_sop;
+    assign rx_data_id       = ll_rx_data_id;
+    assign rx_word_count    = ll_rx_word_count;
+    assign rx_app_data      = ll_rx_app_data;
+    assign rx_valid         = bist_active ? 1'b0 : ll_rx_valid;
+    assign rx_crc_corrupted = bist_active ? 1'b0 : ll_rx_crc_corrupted;
+    
+    assign bist_rx_sop           = ll_rx_sop;
+    assign bist_rx_data_id       = ll_rx_data_id;
+    assign bist_rx_word_count    = ll_rx_word_count;
+    assign bist_rx_app_data      = ll_rx_app_data;
+    assign bist_rx_valid         = ll_rx_valid;
+    
+  end else begin : bist_tieoff
+    
+    assign ll_tx_sop        = tx_sop;
+    assign ll_tx_data_id    = tx_data_id;
+    assign ll_tx_word_count = tx_word_count;
+    assign ll_tx_app_data   = tx_app_data;
+    assign tx_advance       = ll_tx_advance;
+    
+    assign rx_sop           = ll_rx_sop;
+    assign rx_data_id       = ll_rx_data_id;
+    assign rx_word_count    = ll_rx_word_count;
+    assign rx_app_data      = ll_rx_app_data;
+    assign rx_valid         = ll_rx_valid;
+    assign rx_crc_corrupted = ll_rx_crc_corrupted;
+    
+    assign apb_prdata_bist  = 32'd0;
+    assign apb_pready_bist  = 1'b1;
+    assign apb_pslverr_bist = 1'b1; //force a slave error if you try to read it
+  end
+endgenerate
 
 endmodule
 

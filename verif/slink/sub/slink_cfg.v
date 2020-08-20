@@ -4,6 +4,7 @@
 module slink_cfg;
 
 `include "slink_msg.v"
+`include "slink_includes.vh"
 
   localparam      MIN_TS1   = 'd16,
                   MAX_TS1   = 'd256,
@@ -46,6 +47,14 @@ module slink_cfg;
                   HARD_RESET_MAX  = 'd150;
   
   bit [9:0]       hard_reset_time_us;
+  
+  bit [3:0]       bist_mode_payload;
+  bit             bist_mode_wc;
+  bit [15:0]      bist_wc_min;
+  bit [15:0]      bist_wc_max;
+  bit             bist_mode_di;
+  bit [7:0]       bist_di_min;
+  bit [7:0]       bist_di_max;
   
   
   task randomize_cfg;

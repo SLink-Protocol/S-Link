@@ -23,5 +23,6 @@ Welcome to S-Link's documentation!
    slink_tb_top
    attributes
    regs
+   perf_lat
    synthesis
    roadmap

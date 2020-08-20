@@ -7,7 +7,7 @@
 // 7 set reverse video 
 
 int sim_errors      = 0;
-int sim_errors_max  = 20;  //Max errors to print (to keep big logs)
+int sim_errors_max  = 50;  //Max errors to print (to keep big logs)
 int sim_infos       = 0;
 int sim_debugs      = 0;
 initial begin
@@ -21,13 +21,9 @@ end
   $write("SIM_INFO:  %m %s:%0d %0t ns: ", `__FILE__, `__LINE__, $realtime); STRING; sim_infos++;
 
 `define sim_error(STRING) \
-  if(sim_errors < sim_errors_max) begin $write("%c[1:30m",27); $write("SIM_ERROR: %m %s:%0d %0t ns: ", `__FILE__, `__LINE__, $realtime); STRING; $write("%c[0m",27); sim_errors++; \
-  if(sim_errors == sim_errors_max) begin $write("%c[1:30m",27); $write("SIM_ERROR: %m %s:%0d %0t ns: MAX ERROR PRINTING HIT. NO MORE ERRORS", `__FILE__, `__LINE__, $realtime); end  \
-  end
+  $write("SIM_ERROR: %m %s:%0d %0t ns: ", `__FILE__, `__LINE__, $realtime); STRING; sim_errors++;  
   
 `define sim_fatal(STRING) \
   $write("SIM_FATAL:  %s:%0d %0t ns: ", `__FILE__, `__LINE__, $realtime); STRING; $finish();
-
-
 
 

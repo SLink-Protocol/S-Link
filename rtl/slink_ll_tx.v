@@ -106,7 +106,8 @@ wire                                      delim_adv;
 wire                                      delim_start;
 
 
-localparam  APP_DATA_SAVED_SIZE = (DATA_WIDTH != 8) ? (NUM_LANES*DATA_WIDTH) - (NUM_LANES * 8) : 1;
+//localparam  APP_DATA_SAVED_SIZE = ((NUM_LANES*DATA_WIDTH) - (NUM_LANES * 8)) == 0 ? 1 : (NUM_LANES*DATA_WIDTH) - (NUM_LANES * 8);
+localparam  APP_DATA_SAVED_SIZE = ((NUM_LANES*DATA_WIDTH) - 32) == 0 ? 1 : 32;//(NUM_LANES*DATA_WIDTH) - 32;
 reg   [APP_DATA_SAVED_SIZE-1:0] app_data_saved, app_data_saved_in;
 reg                             advance_prev;
 
@@ -226,7 +227,20 @@ always @(*) begin
             end
           end
           
-                    
+          EIGHT_LANE : begin
+            if(NUM_LANES >= 8) begin
+              if(DATA_WIDTH==8) begin
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {2{calculated_ecc, NOP_WC1, NOP_WC0, NOP_DATAID}}};
+                byte_count_in         = 'd0;
+              end
+              
+              if(DATA_WIDTH==16) begin
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {2{calculated_ecc}}, {2{NOP_WC1}}, {2{NOP_WC0}}, {2{NOP_DATAID}},
+                                                                             {2{calculated_ecc}}, {2{NOP_WC1}}, {2{NOP_WC0}}, {2{NOP_DATAID}}};
+                byte_count_in         = 'd0;
+              end
+            end
+          end                    
         endcase
       end
     end
@@ -352,7 +366,8 @@ always @(*) begin
                     //Since we have setup the CRC  input based on the Bytes sent out, bytes 0-3 are the packet header and we
                     //need to effectively start this on the top 4 bytes. 
                     //If we are in a short packet, we also need to take from the respective CRC output (i.e. if only 1 byte, take from byte 4 CRC output)
-                    crc_input           = {{((NUM_LANES-4) * DATA_WIDTH){1'b0}}, app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 32], 32'h0};
+                    //crc_input           = {{((NUM_LANES-4) * DATA_WIDTH){1'b0}}, app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 32], 32'h0};
+                    crc_input           = {{((NUM_LANES-4) * DATA_WIDTH){1'b0}}, app_data[31:0], 32'h0};
                     if(byte_count_in >= word_count) begin
                       advance_in        = 1'b1;
                       case(word_count)
@@ -438,6 +453,412 @@ always @(*) begin
             end
           end
           
+          
+          EIGHT_LANE : begin
+            if(NUM_LANES >= 8) begin
+              if(DATA_WIDTH==8) begin
+                if(sop) begin
+                  if(is_short_pkt) begin
+                    link_data_reg_in    = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {4{IDL_SYM}}, calculated_ecc, word_count, data_id};
+                    advance_in          = 1'b1;
+                    nstate              = IDLE;
+                  end else begin
+                    crc_init            = 1'b0;
+                    byte_count_in       = 'd4;
+                    advance_in          = (APP_DATA_BYTES - byte_count_in[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
+                    crc_input           = {{((NUM_LANES-8) * DATA_WIDTH){1'b0}}, app_data[31:0], 32'h0};
+                    
+                    if(word_count <= 'd4) begin
+                      advance_in        = 1'b1;
+                      case(word_count)
+                        'd1 : begin
+                          crc_valid         = 'h10;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   crc_next[79:72],
+                                                                                   crc_next[71:64],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   word_count[15: 8],  
+                                                                                   word_count[ 7: 0], 
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd2 : begin
+                          crc_valid         = 'h30;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, crc_next[95:88],
+                                                                                   crc_next[87:80],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   word_count[15: 8],  
+                                                                                   word_count[ 7: 0], 
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd3 : begin
+                          crc_valid         = 'h70;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, crc_next[103:96],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   word_count[15: 8],  
+                                                                                   word_count[ 7: 0], 
+                                                                                   data_id};
+                          nstate            = CRC1;
+                        end
+                        
+                        'd4 : begin
+                          crc_valid         = 'hf0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   word_count[15: 8],  
+                                                                                   word_count[ 7: 0], 
+                                                                                   data_id};
+                          nstate            = CRC0;
+                        end
+                      endcase
+                    end else begin
+                      crc_valid             = 'hff0;
+                      link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   word_count[15: 8],  
+                                                                                   word_count[ 7: 0], 
+                                                                                   data_id};
+                      
+                      app_data_saved_in = app_data[APP_DATA_WIDTH-1 -: APP_DATA_SAVED_SIZE];
+                      nstate            = LONG_DATA;
+                    end
+                  end
+                end else begin
+                  link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {4{IDL_SYM}}, calculated_ecc, aux_link_word_count[15: 0], aux_link_data_id};
+                  aux_link_advance_in   = 1'b1;
+                  nstate                = IDLE;
+                end
+              end
+              
+              if(DATA_WIDTH==16) begin
+                if(sop) begin
+                  if(is_short_pkt) begin
+                    link_data_reg_in    = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {5{IDL_SYM}}, calculated_ecc, IDL_SYM, word_count[15:8], IDL_SYM, word_count[7:0], IDL_SYM, data_id};
+                    advance_in          = 1'b1;
+                    nstate              = IDLE;
+                  end else begin
+                    crc_init            = 1'b0;
+                    byte_count_in       = 'd12;
+                    advance_in          = (APP_DATA_BYTES - byte_count_in[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
+                    crc_input           = {{((NUM_LANES-8) * DATA_WIDTH){1'b0}}, app_data[95:0], 32'h0};
+                    
+                    if(word_count <= 'd12) begin
+                      advance_in        = 1'b1;
+                      case(word_count) 
+                        'd1 : begin
+                          crc_valid         = 'h10;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   IDL_SYM,
+                                                                                   IDL_SYM,
+                                                                                   crc_next[79:72],
+                                                                                   IDL_SYM,
+                                                                                   crc_next[71:64],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   calculated_ecc, 
+                                                                                   IDL_SYM,
+                                                                                   word_count[15: 8],  
+                                                                                   IDL_SYM,
+                                                                                   word_count[ 7: 0], 
+                                                                                   IDL_SYM,
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd2 : begin
+                          crc_valid         = 'h30;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   crc_next[95:88],
+                                                                                   IDL_SYM,
+                                                                                   crc_next[87:80],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   calculated_ecc, 
+                                                                                   IDL_SYM,
+                                                                                   word_count[15: 8],  
+                                                                                   IDL_SYM,
+                                                                                   word_count[ 7: 0], 
+                                                                                   IDL_SYM,
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd3 : begin
+                          crc_valid         = 'h70;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   crc_next[103:96],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   calculated_ecc, 
+                                                                                   IDL_SYM,
+                                                                                   word_count[15: 8],  
+                                                                                   IDL_SYM,
+                                                                                   word_count[ 7: 0], 
+                                                                                   crc_next[111:104],
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd4 : begin
+                          crc_valid         = 'hf0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   calculated_ecc, 
+                                                                                   IDL_SYM,
+                                                                                   word_count[15: 8],  
+                                                                                   crc_next[127:120],
+                                                                                   word_count[ 7: 0], 
+                                                                                   crc_next[119:112],
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd5 : begin
+                          crc_valid         = 'h1f0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   calculated_ecc, 
+                                                                                   crc_next[143:136],
+                                                                                   word_count[15: 8],  
+                                                                                   crc_next[135:128],
+                                                                                   word_count[ 7: 0], 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8],
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd6 : begin
+                          crc_valid         = 'h3f0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   crc_next[159:152],
+                                                                                   calculated_ecc, 
+                                                                                   crc_next[151:144],
+                                                                                   word_count[15: 8],  
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8],
+                                                                                   word_count[ 7: 0], 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8],
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd7 : begin
+                          crc_valid         = 'h7f0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   crc_next[175:168],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   crc_next[167:160],
+                                                                                   calculated_ecc, 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8],
+                                                                                   word_count[15: 8],  
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8],
+                                                                                   word_count[ 7: 0], 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8],
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd8 : begin
+                          crc_valid         = 'hff0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   crc_next[191:184],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   crc_next[183:176],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8],
+                                                                                   word_count[15: 8],  
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8],
+                                                                                   word_count[ 7: 0], 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8],
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd9 : begin
+                          crc_valid         = 'h1ff0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, IDL_SYM,
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   crc_next[207:200],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   crc_next[199:192],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+8)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8],
+                                                                                   word_count[15: 8],  
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8],
+                                                                                   word_count[ 7: 0], 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8],
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd10 : begin
+                          crc_valid         = 'h3ff0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, crc_next[223:216],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   crc_next[215:208],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+9)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+8)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8],
+                                                                                   word_count[15: 8],  
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8],
+                                                                                   word_count[ 7: 0], 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8],
+                                                                                   data_id};
+                          nstate            = nstate_idle_check;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd11 : begin
+                          crc_valid         = 'h7ff0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, crc_next[231:224],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+10)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+9)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+8)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8],
+                                                                                   word_count[15: 8],  
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8],
+                                                                                   word_count[ 7: 0], 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8],
+                                                                                   data_id};
+                          nstate            = CRC1;
+                          byte_count_in     = 'd0;
+                        end
+                        
+                        'd12 : begin
+                          crc_valid         = 'hfff0;
+                          link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+11)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+10)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+9)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+8)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8],
+                                                                                   calculated_ecc, 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8],
+                                                                                   word_count[15: 8],  
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8],
+                                                                                   word_count[ 7: 0], 
+                                                                                   app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8],
+                                                                                   data_id};
+                          nstate            = CRC0;
+                          byte_count_in     = 'd0;
+                        end
+                      endcase
+                    end else begin
+                      crc_valid         = 'hfff0;
+                      link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+11)*8) +: 8],
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8],
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+10)*8) +: 8],
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8],
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+9)*8) +: 8],
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8],
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+8)*8) +: 8],
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8],
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8],
+                                                                               calculated_ecc, 
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8],
+                                                                               word_count[15: 8],  
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8],
+                                                                               word_count[ 7: 0], 
+                                                                               app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8],
+                                                                               data_id};
+                      if(advance_in) begin
+                        app_data_saved_in = app_data[APP_DATA_WIDTH-1 -: APP_DATA_SAVED_SIZE];
+                      end
+                      nstate            = LONG_DATA;
+                    end
+                  end
+                end else begin
+                  link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {5{IDL_SYM}}, calculated_ecc, IDL_SYM, aux_link_word_count[15: 8], IDL_SYM, aux_link_word_count[ 7: 0], IDL_SYM, aux_link_data_id};
+                  aux_link_advance_in   = 1'b1;
+                  nstate                = IDLE;
+                end
+              end
+            end
+          end
+          
         endcase
         
       end else if((p1_req || p2_req || p3_req)  && delim_start) begin
@@ -489,6 +910,20 @@ always @(*) begin
             end
           end
           
+          EIGHT_LANE : begin
+            if(NUM_LANES >= 8) begin
+              if(DATA_WIDTH==8) begin
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, calculated_ecc, word_count_reg_in[15: 0], data_id_reg_in};
+                byte_count_in         = 'd0;
+              end
+              
+              if(DATA_WIDTH==16) begin
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {9{IDL_SYM}}, calculated_ecc, IDL_SYM, word_count_reg_in[15: 8], IDL_SYM, word_count_reg_in[ 7: 0], IDL_SYM, data_id_reg_in};
+                byte_count_in         = 'd0;
+              end
+            end
+          end
+          
         endcase
         
         
@@ -535,6 +970,21 @@ always @(*) begin
               end
             end
           end        
+          
+          EIGHT_LANE : begin
+            if(NUM_LANES >= 8) begin
+              if(DATA_WIDTH==8) begin
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {2{calculated_ecc, NOP_WC1, NOP_WC0, NOP_DATAID}}};
+                byte_count_in         = 'd0;
+              end
+              
+              if(DATA_WIDTH==16) begin
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {2{calculated_ecc}}, {2{NOP_WC1}}, {2{NOP_WC0}}, {2{NOP_DATAID}},
+                                                                             {2{calculated_ecc}}, {2{NOP_WC1}}, {2{NOP_WC0}}, {2{NOP_DATAID}}};
+                byte_count_in         = 'd0;
+              end
+            end
+          end
         endcase
         
       end
@@ -784,7 +1234,8 @@ always @(*) begin
                 app_data_saved_in = app_data[APP_DATA_WIDTH-1 -: APP_DATA_SAVED_SIZE];
               end
               if(byte_count_in >= word_count_reg) begin   
-                advance_in      = 1'b1;
+                //advance_in      = 1'b1;
+                advance_in      = advance_prev && (word_count_reg - byte_count <= 'd4) ? 1'b0 : 1'b1;
                 case(byte_count_in - word_count_reg)    //this means number of bytes that are not data in this cycle or free bytes for CRC/IDL
                   'd0 : begin 
                     nstate                    = CRC0;
@@ -868,6 +1319,387 @@ always @(*) begin
           end
         end
         
+        EIGHT_LANE : begin
+          if(NUM_LANES >= 8) begin
+            if(DATA_WIDTH==8) begin
+              crc_valid         = 'hff;
+              link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}},(advance_prev ? app_data      [31:24] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [23:16] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [15: 8] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [ 7: 0] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[31:24] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[23:16] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[15: 8] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[ 7: 0] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8])};
+
+              crc_input         = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}},(advance_prev ? app_data      [31:24] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [23:16] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [15: 8] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [ 7: 0] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[31:24] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[23:16] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[15: 8] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[ 7: 0] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8])};
+              byte_count_in     = byte_count + 'd8;
+              advance_in          = (APP_DATA_BYTES - byte_count_in[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
+              if(advance_in) begin
+                app_data_saved_in = app_data[APP_DATA_WIDTH-1 -: APP_DATA_SAVED_SIZE];
+              end
+              if(byte_count_in >= word_count_reg) begin   
+                //advance_in      = 1'b1;
+                advance_in      = advance_prev && (word_count_reg - byte_count <= 'd4) ? 1'b0 : 1'b1;
+                case(byte_count_in - word_count_reg)    //num free bytes
+                  'd0 : begin 
+                    nstate                    = CRC0;
+                  end
+                  
+                  'd1 : begin
+                    crc_input[63:56]          = 8'd0;
+                    link_data_reg_in[63:56]   = crc_next[103:96];
+                    nstate                    = CRC1;
+                  end
+
+                  'd2 : begin
+                    crc_input[63:48]          = 16'd0;
+                    link_data_reg_in[63:56]   = crc_next[95:88];
+                    link_data_reg_in[55:48]   = crc_next[87:80];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+
+                  'd3 : begin
+                    crc_input[63:40]          = 24'd0;
+                    link_data_reg_in[63:56]   = IDL_SYM;
+                    link_data_reg_in[55:48]   = crc_next[79:72];
+                    link_data_reg_in[47:40]   = crc_next[71:64];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+
+                  'd4 : begin
+                    crc_input[63:32]          = 32'd0;
+                    link_data_reg_in[63:56]   = IDL_SYM;
+                    link_data_reg_in[55:48]   = IDL_SYM;
+                    link_data_reg_in[47:40]   = crc_next[63:56];
+                    link_data_reg_in[39:32]   = crc_next[55:48];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+
+                  'd5 : begin
+                    crc_input[63:24]          = 40'd0;
+                    link_data_reg_in[63:56]   = IDL_SYM;
+                    link_data_reg_in[55:48]   = IDL_SYM;
+                    link_data_reg_in[47:40]   = IDL_SYM;
+                    link_data_reg_in[39:32]   = crc_next[47:40];
+
+                    link_data_reg_in[31:24]   = crc_next[39:32];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+
+                  'd6 : begin
+                    crc_input[63:16]          = 48'd0;
+                    link_data_reg_in[63:56]   = IDL_SYM;
+                    link_data_reg_in[55:48]   = IDL_SYM;
+                    link_data_reg_in[47:40]   = IDL_SYM;
+                    link_data_reg_in[39:32]   = IDL_SYM;
+
+                    link_data_reg_in[31:24]   = crc_next[31:24];
+                    link_data_reg_in[23:16]   = crc_next[23:16];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+
+                  'd7 : begin
+                    crc_input[63: 8]          = 56'd0;
+                    link_data_reg_in[63:56]   = IDL_SYM;
+                    link_data_reg_in[55:48]   = IDL_SYM;
+                    link_data_reg_in[47:40]   = IDL_SYM;
+                    link_data_reg_in[39:32]   = IDL_SYM;
+
+                    link_data_reg_in[31:24]   = IDL_SYM;
+                    link_data_reg_in[23:16]   = crc_next[15: 8];
+                    link_data_reg_in[15: 8]   = crc_next[ 7: 0];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                endcase
+              end              
+            end
+            
+            if(DATA_WIDTH==16) begin
+              crc_valid         = 'hffff;
+              link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}},(advance_prev ? app_data      [95:88] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+15)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [31:24] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 7)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [87:80] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+14)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [23:16] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 6)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [79:72] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+13)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [15: 8] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 5)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [71:64] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+12)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [ 7: 0] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 4)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [63:56] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+11)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[31:24] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 3)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [55:48] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+10)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[23:16] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 2)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [47:40] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 9)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[15: 8] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 1)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [39:32] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 8)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[ 7: 0] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 0)*8) +: 8])};
+
+              crc_input         = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}},(advance_prev ? app_data      [95:88] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+15)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [87:80] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+14)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [79:72] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+13)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [71:64] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+12)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [63:56] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+11)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [55:48] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+10)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [47:40] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 9)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [39:32] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 8)*8) +: 8]),
+                                                                      
+                                                                      (advance_prev ? app_data      [31:24] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 7)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [23:16] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 6)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [15: 8] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 5)*8) +: 8]),
+                                                                      (advance_prev ? app_data      [ 7: 0] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 4)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[31:24] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 3)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[23:16] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 2)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[15: 8] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 1)*8) +: 8]),
+                                                                      (advance_prev ? app_data_saved[ 7: 0] : app_data[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 0)*8) +: 8])};
+              byte_count_in     = byte_count + 'd16;
+              advance_in          = (APP_DATA_BYTES - byte_count_in[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
+              if(advance_in) begin
+                app_data_saved_in = app_data[APP_DATA_WIDTH-1 -: APP_DATA_SAVED_SIZE];
+              end
+              if(byte_count_in >= word_count_reg) begin
+                //advance_in      = 1'b1;
+                //Only asser the advance if we had more than 4 bytes to grab this cycle
+                //DOES THIS NEED TO TAKE INTO ACCOUNT THE advance_prev??????
+                advance_in      = advance_prev && (word_count_reg - byte_count <= 'd4) ? 1'b0 : 1'b1;  //this handles if we did an advnace on the prev cycle in IDLE
+                case(byte_count_in - word_count_reg)
+                  'd0 : begin
+                    nstate                    = CRC0;
+                  end
+                  
+                  'd1 : begin
+                    crc_input[127:120]        = 8'd0;
+                    link_data_reg_in[127:120] = crc_next[231:224];
+                    nstate                    = CRC1;
+                  end
+                  
+                  'd2 : begin
+                    crc_input[127:112]        = 16'd0;
+                    link_data_reg_in[127:120] = crc_next[223:216];
+                    link_data_reg_in[111:104] = crc_next[215:208];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd3 : begin
+                    crc_input[127:104]        = 24'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = crc_next[207:200];
+                    link_data_reg_in[ 95: 88] = crc_next[199:192];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd4 : begin
+                    crc_input[127: 96]        = 32'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = crc_next[191:184];
+                    link_data_reg_in[ 79: 72] = crc_next[183:176];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd5 : begin
+                    crc_input[127: 88]        = 40'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = crc_next[175:168];
+                    link_data_reg_in[ 63: 56] = crc_next[167:160];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd6 : begin
+                    crc_input[127: 80]        = 48'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = crc_next[159:152];
+                    link_data_reg_in[ 47: 40] = crc_next[151:144];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd7 : begin
+                    crc_input[127: 72]        = 56'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = IDL_SYM;
+                    link_data_reg_in[ 47: 40] = crc_next[143:136];
+                    link_data_reg_in[ 31: 24] = crc_next[135:128];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd8 : begin
+                    crc_input[127: 64]        = 64'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = IDL_SYM;
+                    link_data_reg_in[ 47: 40] = IDL_SYM;
+                    link_data_reg_in[ 31: 24] = crc_next[127:120];
+                    link_data_reg_in[ 15:  8] = crc_next[119:112];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd9 : begin
+                    crc_input[127: 56]        = 72'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = IDL_SYM;
+                    link_data_reg_in[ 47: 40] = IDL_SYM;
+                    link_data_reg_in[ 31: 24] = IDL_SYM;
+                    link_data_reg_in[ 15:  8] = crc_next[111:104];
+                    
+                    link_data_reg_in[119:112] = crc_next[103: 96];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd10 : begin
+                    crc_input[127: 48]        = 80'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = IDL_SYM;
+                    link_data_reg_in[ 47: 40] = IDL_SYM;
+                    link_data_reg_in[ 31: 24] = IDL_SYM;
+                    link_data_reg_in[ 15:  8] = IDL_SYM;
+                    
+                    link_data_reg_in[119:112] = crc_next[ 95: 88];
+                    link_data_reg_in[103: 96] = crc_next[ 87: 80];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd11 : begin
+                    crc_input[127: 40]        = 88'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = IDL_SYM;
+                    link_data_reg_in[ 47: 40] = IDL_SYM;
+                    link_data_reg_in[ 31: 24] = IDL_SYM;
+                    link_data_reg_in[ 15:  8] = IDL_SYM;
+                    
+                    link_data_reg_in[119:112] = IDL_SYM;
+                    link_data_reg_in[103: 96] = crc_next[ 79: 72];
+                    link_data_reg_in[ 87: 80] = crc_next[ 71: 64];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd12 : begin
+                    crc_input[127: 32]        = 96'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = IDL_SYM;
+                    link_data_reg_in[ 47: 40] = IDL_SYM;
+                    link_data_reg_in[ 31: 24] = IDL_SYM;
+                    link_data_reg_in[ 15:  8] = IDL_SYM;
+                    
+                    link_data_reg_in[119:112] = IDL_SYM;
+                    link_data_reg_in[103: 96] = IDL_SYM;
+                    link_data_reg_in[ 87: 80] = crc_next[ 63: 56];
+                    link_data_reg_in[ 71: 64] = crc_next[ 55: 48];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd13 : begin
+                    crc_input[127: 24]        = 104'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = IDL_SYM;
+                    link_data_reg_in[ 47: 40] = IDL_SYM;
+                    link_data_reg_in[ 31: 24] = IDL_SYM;
+                    link_data_reg_in[ 15:  8] = IDL_SYM;
+                    
+                    link_data_reg_in[119:112] = IDL_SYM;
+                    link_data_reg_in[103: 96] = IDL_SYM;
+                    link_data_reg_in[ 87: 80] = IDL_SYM;
+                    link_data_reg_in[ 71: 64] = crc_next[ 47: 40];
+                    link_data_reg_in[ 55: 48] = crc_next[ 39: 32];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd14 : begin
+                    crc_input[127: 16]        = 112'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = IDL_SYM;
+                    link_data_reg_in[ 47: 40] = IDL_SYM;
+                    link_data_reg_in[ 31: 24] = IDL_SYM;
+                    link_data_reg_in[ 15:  8] = IDL_SYM;
+                    
+                    link_data_reg_in[119:112] = IDL_SYM;
+                    link_data_reg_in[103: 96] = IDL_SYM;
+                    link_data_reg_in[ 87: 80] = IDL_SYM;
+                    link_data_reg_in[ 71: 64] = IDL_SYM;
+                    link_data_reg_in[ 55: 48] = crc_next[ 31: 24];
+                    link_data_reg_in[ 39: 32] = crc_next[ 23: 16];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                  
+                  'd15 : begin
+                    crc_input[127:  8]        = 120'd0;
+                    link_data_reg_in[127:120] = IDL_SYM;
+                    link_data_reg_in[111:104] = IDL_SYM;
+                    link_data_reg_in[ 95: 88] = IDL_SYM;
+                    link_data_reg_in[ 79: 72] = IDL_SYM;
+                    link_data_reg_in[ 63: 56] = IDL_SYM;
+                    link_data_reg_in[ 47: 40] = IDL_SYM;
+                    link_data_reg_in[ 31: 24] = IDL_SYM;
+                    link_data_reg_in[ 15:  8] = IDL_SYM;
+                    
+                    link_data_reg_in[119:112] = IDL_SYM;
+                    link_data_reg_in[103: 96] = IDL_SYM;
+                    link_data_reg_in[ 87: 80] = IDL_SYM;
+                    link_data_reg_in[ 71: 64] = IDL_SYM;
+                    link_data_reg_in[ 55: 48] = IDL_SYM;
+                    link_data_reg_in[ 39: 32] = crc_next[ 15:  8];
+                    link_data_reg_in[ 23: 16] = crc_next[  7:  0];
+                    byte_count_in             = 'd0;
+                    nstate                    = IDLE;
+                  end
+                endcase
+              end
+            end
+          end
+        end
+        
       endcase
     end
     
@@ -912,6 +1744,20 @@ always @(*) begin
               link_data_reg_in  = {{(NUM_LANES-4)*(DATA_WIDTH){1'b0}}, {4{IDL_SYM}}, IDL_SYM, crc_reg[127:120], IDL_SYM, crc_reg[119:112]}; 
               nstate            = nstate_idle_check;                
             end 
+          end
+        end
+        
+        EIGHT_LANE : begin
+          if(NUM_LANES >= 8) begin
+            if(DATA_WIDTH==8) begin
+              link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {6{IDL_SYM}}, crc_reg[127:112]}; 
+              nstate            = nstate_idle_check;
+            end
+            
+            if(DATA_WIDTH==16) begin
+              link_data_reg_in  = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {13{IDL_SYM}}, crc_reg[255:248], IDL_SYM, crc_reg[247:240]}; 
+              nstate            = nstate_idle_check;
+            end
           end
         end
         
@@ -964,6 +1810,22 @@ always @(*) begin
 
             if(DATA_WIDTH==16) begin
               link_data_reg_in    = {{(NUM_LANES-4)*(DATA_WIDTH){1'b0}}, {7{IDL_SYM}}, crc_reg[111:104]};
+              nstate              = nstate_idle_check;
+              byte_count_in       = 'd0;
+            end
+          end
+        end
+        
+        EIGHT_LANE : begin
+          if(NUM_LANES >= 8) begin
+            if(DATA_WIDTH==8) begin
+              link_data_reg_in    = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {7{IDL_SYM}}, crc_reg[111:104]};
+              nstate              = nstate_idle_check;
+              byte_count_in       = 'd0;
+            end
+            
+            if(DATA_WIDTH==16) begin
+              link_data_reg_in    = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {15{IDL_SYM}}, crc_reg[239:232]};
               nstate              = nstate_idle_check;
               byte_count_in       = 'd0;
             end
@@ -1093,6 +1955,34 @@ always @(*) begin
             end
           end
         end
+        
+        EIGHT_LANE : begin
+          if(NUM_LANES >= 8) begin
+            if(DATA_WIDTH==8) begin
+              if(px_req_pkt_seen_in && delim_start) begin
+                data_id_reg_in        = PX_START;
+                word_count_reg_in     = px_start_wc;
+                packet_header_syn_in  = {word_count_reg_in, data_id_reg_in};
+                nstate                = PX_START_ST;
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {4{IDL_SYM}}, calculated_ecc, px_start_wc[15: 8], px_start_wc[ 7: 0], PX_START};
+              end else begin
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {4{IDL_SYM}}, calculated_ecc, word_count_reg[15: 8], word_count_reg[ 7: 0], data_id_reg};
+              end
+            end
+            
+            if(DATA_WIDTH==16) begin
+              if(px_req_pkt_seen_in && delim_start) begin
+                data_id_reg_in        = PX_START;
+                word_count_reg_in     = px_start_wc;
+                packet_header_syn_in  = {word_count_reg_in, data_id_reg_in};
+                nstate                = PX_START_ST;
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {9{IDL_SYM}}, calculated_ecc, IDL_SYM, px_start_wc[15: 8], IDL_SYM, px_start_wc[ 7: 0], IDL_SYM, PX_START};
+              end else begin
+                link_data_reg_in      = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {9{IDL_SYM}}, calculated_ecc, IDL_SYM, word_count_reg[15: 8], IDL_SYM, word_count_reg[ 7: 0], IDL_SYM, data_id_reg};
+              end
+            end
+          end
+        end
       endcase
       
       if(~delim_start) begin
@@ -1187,6 +2077,20 @@ always @(*) begin
             end
           end
         end
+        
+        EIGHT_LANE : begin
+          if(NUM_LANES >= 8) begin
+            if(DATA_WIDTH==8) begin
+              link_data_reg_in    = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {4{IDL_SYM}}, calculated_ecc, word_count_reg_in[15: 0], data_id_reg_in};
+              nstate              = WAIT_SDS;
+            end
+            
+            if(DATA_WIDTH==16) begin
+              link_data_reg_in    = {{(NUM_LANES-8)*(DATA_WIDTH){1'b0}}, {9{IDL_SYM}}, calculated_ecc, IDL_SYM, word_count_reg_in[15: 8], IDL_SYM, word_count_reg_in[7: 0], IDL_SYM, data_id_reg_in};
+              nstate              = WAIT_SDS;
+            end
+          end
+        end
       endcase      
       
       
@@ -1253,14 +2157,14 @@ generate
     // had some odd number for the word count
     
     slink_crc_8_16bit_compute u_slink_crc_8_16bit_compute (
-      .clk         ( clk                                                      ),  
-      .reset       ( reset                                                    ),  
-      .data_in     ( {8'd0, crc_input[((genloop+1)*8)-1 : genloop*8]}         ),  
-      .valid       ( {1'b0, crc_valid[genloop]}                               ),  
-      .init        ( crc_init                                                 ),  
-      .crc_prev    ( crc_prev[((genloop+1)*16)-1 : (genloop*16)]              ),    
-      .crc_next    ( crc_next[((genloop+1)*16)-1 : (genloop*16)]              ),    
-      .crc         ( crc_reg [((genloop+1)*16)-1 : (genloop*16)]              )); 
+      .clk         ( clk                                          ),  
+      .reset       ( reset                                        ),  
+      .data_in     ( crc_input[((genloop+1)*8)-1 : genloop*8]     ),  
+      .valid       ( crc_valid[genloop]                           ),  
+      .init        ( crc_init                                     ),  
+      .crc_prev    ( crc_prev[((genloop+1)*16)-1 : (genloop*16)]  ),    
+      .crc_next    ( crc_next[((genloop+1)*16)-1 : (genloop*16)]  ),    
+      .crc         ( crc_reg [((genloop+1)*16)-1 : (genloop*16)]  )); 
     
     
     // Depending on the number of active lanes, we will need to set the lowest CRC input to be 

@@ -103,6 +103,33 @@ assign clk_out = clk_in;
 
 endmodule
 
+
+module slink_clock_gate(
+  input  wire   clk_in,
+  input  wire   reset,
+  input  wire   core_scan_mode,
+  input  wire   enable,
+  input  wire   disable_clkgate,
+  output wire   clk_out
+);
+
+wire clk_en;
+wire enable_ff2;
+
+slink_demet_reset u_slink_demet_reset (
+  .clk     ( clk_in           ),      
+  .reset   ( reset            ),      
+  .sig_in  ( enable ||
+             disable_clkgate  ),      
+  .sig_out ( enable_ff2       )); 
+
+
+assign clk_en = enable_ff2 | core_scan_mode;
+
+assign clk_out = clk_en & clk_in;
+
+endmodule
+
 module slink_clock_or(
   input  wire   clk0,
   input  wire   clk1,
