@@ -383,9 +383,22 @@ task slink_force_hard_reset;
   driver_m2s.write_local_attr  (ATTR_HARD_RESET_US, cfg.hard_reset_time_us);
   driver_m2s.write_far_end_attr(ATTR_HARD_RESET_US, cfg.hard_reset_time_us);
   
-  //Perform hard reset  
-  driver_m2s.set_slink_reset;
+  //go low power state to take new settings
+  driver_m2s.enterP1;
+  driver_m2s.wakeup_link;
   
+  fork
+    driver_m2s.sendRandomShortPacket;
+    driver_s2m.sendRandomShortPacket;
+  join
+  fork
+    driver_m2s.sendRandomLongPacket;
+    driver_s2m.sendRandomLongPacket;
+  join 
+  
+  
+  //Perform HARD Reset and check
+  driver_m2s.set_slink_reset;
   #((cfg.hard_reset_time_us+1) * 1us);
   
   // See if the attributes were reset MAKE THIS BETTER)

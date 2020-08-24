@@ -485,7 +485,6 @@ slink_ltssm #(
   .ltssm_data              ( phy_tx_data                  ),
   .ltssm_state             ( ltssm_state                  )); 
 
-
 assign slink_gpio_wake_n_oen = ~ltssm_link_wake_n;
 assign slink_gpio_reset_n_oen= ~ltssm_link_reset_n;
 
