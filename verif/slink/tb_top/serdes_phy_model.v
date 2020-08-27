@@ -1,4 +1,4 @@
-`timescale 1ps/1ps
+`timescale 1ps/1fs
 
 /*
 .rst_start
@@ -104,7 +104,7 @@ module serdes_rx_model#(
   input  wire                   bitclk,
   
   input  wire                   enable,
-  output wire                   rxclk,
+  output reg                    rxclk,
   input  wire                   rx_align,
   output reg  [DATA_WIDTH-1:0]  rx_data,
   input  wire                   rx_reset,
@@ -127,7 +127,10 @@ always @(posedge bitclk or posedge rx_reset) begin
   end
 end
 
-assign rxclk = rx_count < (DATA_WIDTH/2);
+//assign rxclk = rx_count < (DATA_WIDTH/2);
+always @(*) begin
+  rxclk <= rx_count < (DATA_WIDTH/2);
+end
 
 reg [DATA_WIDTH-1:0] rx_data_samp;
 
@@ -144,51 +147,51 @@ end
 
 //Alignment logic
 
-reg  [DATA_WIDTH-1:0] rx_data_align;
-
-
-reg  [(DATA_WIDTH*2)-1:0] data_comp;
-wire [DATA_WIDTH-1:0]     aligned_data_index_pre;
-reg  [DATA_WIDTH-1:0]     aligned_data_index;
-wire [DATA_WIDTH-1:0]     aligned_data_index_in;
-wire [DATA_WIDTH-1:0]     data_out_in [DATA_WIDTH-1:0];
-genvar genloop;
-generate
-  for(genloop = 0; genloop < DATA_WIDTH; genloop = genloop + 1) begin : data_alignment
-    assign aligned_data_index_pre[genloop] = data_comp[genloop+(DATA_WIDTH-1):genloop] == {{(DATA_WIDTH/8)-1{8'h55}}, 8'hbc};  //fix this
-    assign data_out_in[genloop]            = data_comp[genloop+(DATA_WIDTH-1):genloop];
-    
-    //Output data assignment
-    always @(*) begin
-      if(|aligned_data_index) begin
-        if(aligned_data_index[genloop]) begin
-          rx_data_align  = data_out_in[genloop];
-        end
-      end else begin
-        rx_data_align = 'd0;
-      end
-    end
-  end
-  
-  
-  
-endgenerate
-
-assign aligned_data_index_in = rx_align && (|aligned_data_index_pre) ? aligned_data_index_pre : aligned_data_index;
-
-always @(posedge rxclk or posedge rx_reset) begin
-  if(rx_reset) begin
-    data_comp           <= {DATA_WIDTH*2{1'b0}};
-    aligned_data_index  <= {DATA_WIDTH{1'b0}};
-  end else begin
-    data_comp           <= {rx_data_samp, data_comp[(DATA_WIDTH*2)-1: DATA_WIDTH]};
-    aligned_data_index  <= enable ? aligned_data_index_in : 'd0;
-  end
-end
-
-assign rx_locked = (|aligned_data_index);
-assign rx_valid  = rx_locked;
-
+// reg  [DATA_WIDTH-1:0] rx_data_align;
+// 
+// 
+// reg  [(DATA_WIDTH*2)-1:0] data_comp;
+// wire [DATA_WIDTH-1:0]     aligned_data_index_pre;
+// reg  [DATA_WIDTH-1:0]     aligned_data_index;
+// wire [DATA_WIDTH-1:0]     aligned_data_index_in;
+// wire [DATA_WIDTH-1:0]     data_out_in [DATA_WIDTH-1:0];
+// genvar genloop;
+// generate
+//   for(genloop = 0; genloop < DATA_WIDTH; genloop = genloop + 1) begin : data_alignment
+//     assign aligned_data_index_pre[genloop] = data_comp[genloop+(DATA_WIDTH-1):genloop] == {{(DATA_WIDTH/8)-1{8'h55}}, 8'hbc};  //fix this
+//     assign data_out_in[genloop]            = data_comp[genloop+(DATA_WIDTH-1):genloop];
+//     
+//     //Output data assignment
+//     always @(*) begin
+//       if(|aligned_data_index) begin
+//         if(aligned_data_index[genloop]) begin
+//           rx_data_align  = data_out_in[genloop];
+//         end
+//       end else begin
+//         rx_data_align = 'd0;
+//       end
+//     end
+//   end
+//   
+//   
+//   
+// endgenerate
+// 
+// assign aligned_data_index_in = rx_align && (|aligned_data_index_pre) ? aligned_data_index_pre : aligned_data_index;
+// 
+// always @(posedge rxclk or posedge rx_reset) begin
+//   if(rx_reset) begin
+//     data_comp           <= {DATA_WIDTH*2{1'b0}};
+//     aligned_data_index  <= {DATA_WIDTH{1'b0}};
+//   end else begin
+//     data_comp           <= {rx_data_samp, data_comp[(DATA_WIDTH*2)-1: DATA_WIDTH]};
+//     aligned_data_index  <= enable ? aligned_data_index_in : 'd0;
+//   end
+// end
+// 
+// assign rx_locked = (|aligned_data_index);
+// assign rx_valid  = rx_locked;
+// 
 assign rx_dordy  = rx_valid;
 //assign rx_ready  = enable;
 always @(*) begin
@@ -203,11 +206,20 @@ always @(*) begin
   end
 end
 
+assign rx_valid = rx_ready;
 
-always @(*) begin
-  rx_data = rx_data_align;
+// always @(*) begin
+//   rx_data = rx_data_align;
+// end
+
+
+always @(posedge rxclk or posedge rx_reset) begin
+  if(rx_reset) begin
+    rx_data <= 'd0;
+  end else begin
+    rx_data <= rx_data_samp;
+  end
 end
-
 
 endmodule
 
@@ -273,7 +285,7 @@ initial begin
   foreach(delay_amount[i]) begin
     delay_amount[i] = $urandom;
     //delay_amount[i] = 0;
-    //$display("mst %0d -- %0d", i, mst_delay_amount[i]);
+    $display("mst %0d -- %0d", i, delay_amount[i]);
   end
 end
 
