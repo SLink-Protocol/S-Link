@@ -78,6 +78,7 @@ module slink #(
   output wire [(NUM_TX_LANES*PHY_DATA_WIDTH)-1:0] phy_tx_data,
   
   output wire [NUM_RX_LANES-1:0]                  phy_rx_en,
+  input  wire [NUM_RX_LANES-1:0]                  phy_rx_clk,   
   input  wire [NUM_RX_LANES-1:0]                  phy_rx_ready,
   input  wire [NUM_RX_LANES-1:0]                  phy_rx_valid,   
   input  wire [NUM_RX_LANES-1:0]                  phy_rx_dordy,  
@@ -100,6 +101,11 @@ wire [(NUM_RX_LANES*PHY_DATA_WIDTH)-1:0]rx_deskew_data;
 wire                                    deskew_enable;
 wire                                    sds_sent;
 wire [(NUM_TX_LANES*PHY_DATA_WIDTH)-1:0]tx_link_data;
+wire                                    ll_tx_valid;
+wire                                    ll_rx_valid_adv;
+
+wire [NUM_RX_LANES-1:0]                 rx_clk_scan;
+wire [NUM_RX_LANES-1:0]                 rx_clk_reset;
 
 
 wire          swi_swreset;
@@ -220,7 +226,9 @@ wire                          ll_rx_valid;
 wire                          ll_rx_crc_corrupted;
 
 
-slink_clk_control u_slink_clk_control (
+slink_clk_control #(
+  .NUM_RX_LANES     ( NUM_RX_LANES )
+) u_slink_clk_control (
   .core_scan_mode              ( core_scan_mode               ),  
   .core_scan_clk               ( core_scan_clk                ),  
   .core_scan_asyncrst_ctrl     ( core_scan_asyncrst_ctrl      ),  
@@ -234,6 +242,9 @@ slink_clk_control u_slink_clk_control (
   .use_phy_clk                 ( use_phy_clk                  ),       
   .refclk_scan                 ( refclk_scan                  ),  
   .refclk_scan_reset           ( refclk_scan_reset            ),
+  .rxclk_in                    ( phy_rx_clk                   ),
+  .rxclk_out                   ( rx_clk_scan                  ),
+  .rxclk_reset_out             ( rx_clk_reset                 ),
   .link_clk                    ( link_clk                     ),         
   .link_clk_reset              ( link_clk_reset               )); 
 
@@ -307,6 +318,7 @@ slink_ll_tx #(
   .active_lanes             ( attr_active_txs                     ),  
   .sds_sent                 ( sds_sent                            ), 
   .link_data                ( tx_link_data                        ),
+  .ll_tx_valid              ( ll_tx_valid                         ),
   .ll_tx_state              ( ll_tx_state                         )); 
 
 
@@ -367,28 +379,36 @@ slink_ll_rx #(
   .px_start_pkt                       ( rx_px_start_pkt                     ),
     
   .link_data                          ( rx_deskew_data                      ),
+  .ll_rx_valid                        ( ll_rx_valid_adv                         ),
   .ll_rx_state                        ( ll_rx_state                         )); 
 
 
-slink_rx_deskew #(
+wire [NUM_RX_LANES-1:0] rx_data_valid_out;
+slink_rx_align_deskew #(
   //parameters
-  .DATA_WIDTH         ( PHY_DATA_WIDTH      ),
-  .FIFO_DEPTH         ( DESKEW_FIFO_DEPTH   ),
-  .NUM_LANES          ( NUM_RX_LANES        )
-) u_slink_rx_deskew (
+  .FIFO_DEPTH         ( DESKEW_FIFO_DEPTH ),
+  .NUM_LANES          ( NUM_RX_LANES      ),
+  .DATA_WIDTH         ( PHY_DATA_WIDTH    )
+) u_slink_rx_align_deskew (
   .clk                 ( link_clk             ),  
   .reset               ( link_clk_reset       ),  
   .enable              ( deskew_enable        ),  
-  .rx_data_in          ( phy_rx_data          ), 
-  .active_lanes        ( attr_active_rxs      ),   
-  .fifo_ptr_status     ( /*connect me*/       ),  //output - [(NUM_LANES*FIFO_CLOG2)-1:0]              
+  .blockalign          ( (|phy_rx_align)      ),  
+  
+  .rxclk               ( rx_clk_scan          ),
+  .rxclk_reset         ( rx_clk_reset         ),
+  .rx_data_in          ( phy_rx_data          ),  
+  
+  .active_lanes        ( attr_active_rxs      ),  
+  .fifo_ptr_status     ( /*connect me???*/    ),  
   .rx_ts1_seen         ( rx_ts1_seen          ),  
   .rx_ts2_seen         ( rx_ts2_seen          ),  
   .rx_sds_seen         ( rx_sds_seen          ),  
-  .rx_data_out         ( rx_deskew_data       ),  //output - [(NUM_LANES*DATA_WIDTH)-1:0]              
-  .rx_data_valid_out   ( /*connect me???*/    ),
+  .rx_data_out         ( rx_deskew_data       ),        
+  .rx_data_valid_out   ( rx_data_valid_out    ),  
   .deskew_state        ( deskew_state         )); 
 
+assign ll_rx_valid_adv = rx_data_valid_out[0];
 
 //-------------------------------------------
 // LTSSM
@@ -444,6 +464,7 @@ slink_ltssm #(
   .px_clk_trail            ( {8'd0, attr_px_clk_trail}    ),
   .swi_clk_switch_time     ( 16'd8                        ),  
   .swi_p0_exit_time        ( 16'd16                        ),
+  .attr_sync_freq          ( 8'd15 ),
   .active_rx_lanes         ( attr_active_rxs              ),      
   .active_tx_lanes         ( attr_active_txs              ),      
   .use_phy_clk             ( use_phy_clk                  ),  
@@ -482,6 +503,7 @@ slink_ltssm #(
   .phy_rx_dordy            ( phy_rx_dordy                 ),
   .phy_rx_align            ( phy_rx_align                 ),  
   .link_data               ( tx_link_data                 ),  
+  .ll_tx_valid             ( ll_tx_valid                  ),
   .ltssm_data              ( phy_tx_data                  ),
   .ltssm_state             ( ltssm_state                  )); 
 

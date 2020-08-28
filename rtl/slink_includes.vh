@@ -7,6 +7,14 @@ localparam    SDS_BYTE0 = 8'hdc;
 localparam    SDS_BYTEX = 8'hab;
 
 
+localparam    SNYC_B0   = 8'h00;
+localparam    SNYC_B1   = 8'hff;
+
+
+localparam    SH_DATA   = 2'b10;
+localparam    SH_CTRL   = 2'b01;
+
+
 //Short NOP Packet
 localparam    NOP_DATAID = 8'h01,
               NOP_WC0    = 8'hfe,

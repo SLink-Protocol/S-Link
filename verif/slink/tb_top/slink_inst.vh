@@ -119,6 +119,7 @@ wire [NUM_TX_LANES-1:0]                       mst_phy_tx_ready;
 wire [NUM_TX_LANES-1:0]                       mst_phy_tx_dirdy;
 wire [(NUM_TX_LANES*MST_PHY_DATA_WIDTH)-1:0]  mst_phy_tx_data;
 wire [NUM_RX_LANES-1:0]                       mst_phy_rx_en;
+wire [NUM_RX_LANES-1:0]                       mst_phy_rx_clk;
 wire [NUM_RX_LANES-1:0]                       mst_phy_rx_ready;
 wire [NUM_RX_LANES-1:0]                       mst_phy_rx_valid;
 wire [NUM_RX_LANES-1:0]                       mst_phy_rx_dordy;
@@ -134,6 +135,7 @@ wire [NUM_RX_LANES-1:0]                       slv_phy_tx_ready;
 wire [NUM_RX_LANES-1:0]                       slv_phy_tx_dirdy;
 wire [(NUM_RX_LANES*SLV_PHY_DATA_WIDTH)-1:0]  slv_phy_tx_data;
 wire [NUM_TX_LANES-1:0]                       slv_phy_rx_en;
+wire [NUM_TX_LANES-1:0]                       slv_phy_rx_clk;
 wire [NUM_TX_LANES-1:0]                       slv_phy_rx_ready;
 wire [NUM_TX_LANES-1:0]                       slv_phy_rx_valid;
 wire [NUM_TX_LANES-1:0]                       slv_phy_rx_dordy;
@@ -311,7 +313,8 @@ slink #(
   .phy_tx_ready                ( mst_phy_tx_ready             ),  
   .phy_tx_dirdy                ( mst_phy_tx_dirdy             ),
   .phy_tx_data                 ( mst_phy_tx_data              ),   
-  .phy_rx_en                   ( mst_phy_rx_en                ),  
+  .phy_rx_en                   ( mst_phy_rx_en                ), 
+  .phy_rx_clk                  ( mst_phy_rx_clk               ), 
   .phy_rx_ready                ( mst_phy_rx_ready             ),  
   .phy_rx_valid                ( mst_phy_rx_valid             ), 
   .phy_rx_dordy                ( mst_phy_rx_dordy             ), 
@@ -383,6 +386,7 @@ slink #(
   .phy_tx_dirdy                ( slv_phy_tx_dirdy             ),
   .phy_tx_data                 ( slv_phy_tx_data              ),   
   .phy_rx_en                   ( slv_phy_rx_en                ),  
+  .phy_rx_clk                  ( slv_phy_rx_clk               ),
   .phy_rx_ready                ( slv_phy_rx_ready             ),  
   .phy_rx_valid                ( slv_phy_rx_valid             ), 
   .phy_rx_dordy                ( slv_phy_rx_dordy             ), 
@@ -418,6 +422,18 @@ initial begin
     `sim_info($display("No waveform saving this sim"))
   end else begin
     $dumpvars(0);
+//     for(int i = 0; i < 32; i++) begin
+//       $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.gen_block_align[0].u_slink_rx_blockalign_128b13xb.data_out_sel[i]);
+//     end
+//     
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[0][0]);
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[0][1]);
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[0][2]);
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[0][3]);
+//     
+//     $dumpvars(0, u_slink_MASTER.u_slink_rx_align_deskew.u_slink_rx_deskew.sds_byte_count[0]);
+//     $dumpvars(0, u_slink_MASTER.u_slink_rx_align_deskew.u_slink_rx_deskew.sds_byte_count[1]);
+    
   end
   #1ms;
   `sim_fatal($display("sim timeout"));
@@ -449,7 +465,7 @@ serdes_phy_model #(
   .tx_dirdy      ( mst_phy_tx_dirdy             ),  
   .tx_ready      ( mst_phy_tx_ready             ),  
   .rx_enable     ( mst_phy_rx_en                ),  
-  .rxclk         (                              ),  
+  .rxclk         ( mst_phy_rx_clk               ),  
   .rx_align      ( mst_phy_rx_align             ),  
   .rx_data       ( mst_phy_rx_data              ),  
   .rx_reset      ( {NUM_RX_LANES{main_reset}}   ),  
@@ -481,7 +497,7 @@ serdes_phy_model #(
   .tx_dirdy      ( slv_phy_tx_dirdy             ),  
   .tx_ready      ( slv_phy_tx_ready             ),  
   .rx_enable     ( slv_phy_rx_en                ),  
-  .rxclk         (                              ),  
+  .rxclk         ( slv_phy_rx_clk               ),  
   .rx_align      ( slv_phy_rx_align             ),  
   .rx_data       ( slv_phy_rx_data              ),  
   .rx_reset      ( {NUM_TX_LANES{main_reset}}   ),  

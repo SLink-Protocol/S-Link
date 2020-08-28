@@ -99,7 +99,8 @@ endmodule
 
  //--------------------------------------------
 module serdes_rx_model#(
-  parameter DATA_WIDTH = 8
+  parameter DATA_WIDTH = 8,
+  parameter UI_PS      = 125
 )(
   input  wire                   bitclk,
   
@@ -119,7 +120,23 @@ module serdes_rx_model#(
 int random_delay;
 
 int rx_count;
-always @(posedge bitclk or posedge rx_reset) begin
+
+bit rx_bclk;
+
+time random_cycle_dly;
+
+initial begin
+  //1-10ps random delay to give some difference in the RX clocks
+  random_cycle_dly = (1 + {$urandom} % ((UI_PS/4.0) - 1)) * 1ps;
+  
+end
+
+always @(*) begin
+  rx_bclk <= #(random_cycle_dly) bitclk;
+end
+
+
+always @(posedge /*bitclk*/rx_bclk or posedge rx_reset) begin
   if(rx_reset) begin
     rx_count <= 0;
   end else begin
@@ -134,7 +151,7 @@ end
 
 reg [DATA_WIDTH-1:0] rx_data_samp;
 
-always @(posedge bitclk or posedge rx_reset) begin
+always @(posedge /*bitclk*/rx_bclk or posedge rx_reset) begin
   if(rx_reset) begin
     rx_data_samp <= 0;
   end else begin

@@ -59,6 +59,7 @@ module slink_ll_rx #(
   
   
   input  wire [(NUM_LANES*DATA_WIDTH)-1:0]  link_data,
+  input  wire                               ll_rx_valid,
   output wire [3:0]                         ll_rx_state
 );
 
@@ -160,12 +161,12 @@ always @(posedge clk or posedge reset) begin
     send_saved_sop      <= send_saved_sop_in;
     send_saved_di       <= send_saved_di_in;
     send_saved_wc       <= send_saved_wc_in;
-    valid_prev          <= valid_app/* && (state == LONG_DATA)*/;
+    valid_prev          <= ~ll_rx_valid ? valid_prev : valid_app;
   end
 end
 
 
-assign delim_count_in             = (state == WAIT_SDS) || (delim_count == delimeter) ? 'd0 : delim_count + 'd1;
+assign delim_count_in             = ll_rx_valid ? (state == WAIT_SDS) || (delim_count == delimeter) ? 'd0 : delim_count + 'd1 : delim_count;
 assign delim_adv                  = delim_count == 'd0;//delim_count_in == delimeter;
 
 assign ll_rx_state                = state;
@@ -287,7 +288,7 @@ always @(*) begin
       
       
       
-      if(delim_adv) begin
+      if(delim_adv && ll_rx_valid) begin
         case(active_lanes)
           ONE_LANE : begin
             if(DATA_WIDTH==8) begin
@@ -739,41 +740,30 @@ always @(*) begin
     //-------------------------------------------
     //We can only come here in ONE_LANE mode and 8bit
     HEADER_WC0 : begin
-      case(active_lanes)
-        ONE_LANE : begin
-          if(DATA_WIDTH==8) begin
-            word_count_reg_in       = {8'd0, link_data[7:0]};
-            nstate                  = HEADER_WC1;
+      if(ll_rx_valid) begin
+        case(active_lanes)
+          ONE_LANE : begin
+            if(DATA_WIDTH==8) begin
+              word_count_reg_in       = {8'd0, link_data[7:0]};
+              nstate                  = HEADER_WC1;
+            end
           end
-        end
-      endcase
+        endcase
+      end
     end
     
     //-------------------------------------------
     //We can only come here in ONE_LANE or TWO_LANE 8bit mode
     HEADER_WC1 : begin
-      case(active_lanes)
-        ONE_LANE : begin
-          if(DATA_WIDTH==8) begin
-            word_count_reg_in       = {link_data[7:0], word_count_reg[7:0]};
-            nstate                  = HEADER_ECC;
-          end
-
-          if(DATA_WIDTH==16) begin
-            ph_check                = {link_data[7:0], word_count_reg[7:0], data_id_reg};
-            rx_ecc                  = link_data[15:8];
-            data_id_reg_in          = corrected_ph[7:0];
-            word_count_reg_in       = corrected_ph[23:8];
-            nstate                  = short_pkt_check_corrected ? IDLE : LONG_DATA;
-            sop_in                  = short_pkt_corrected_cond;
-            valid_in                = short_pkt_corrected_cond;
-            byte_count_in           = 'd0;
-          end
-        end
-        
-        TWO_LANE : begin
-          if(NUM_LANES >= 2) begin
+      if(ll_rx_valid) begin
+        case(active_lanes)
+          ONE_LANE : begin
             if(DATA_WIDTH==8) begin
+              word_count_reg_in       = {link_data[7:0], word_count_reg[7:0]};
+              nstate                  = HEADER_ECC;
+            end
+
+            if(DATA_WIDTH==16) begin
               ph_check                = {link_data[7:0], word_count_reg[7:0], data_id_reg};
               rx_ecc                  = link_data[15:8];
               data_id_reg_in          = corrected_ph[7:0];
@@ -784,92 +774,85 @@ always @(*) begin
               byte_count_in           = 'd0;
             end
           end
-        end
-      endcase
+
+          TWO_LANE : begin
+            if(NUM_LANES >= 2) begin
+              if(DATA_WIDTH==8) begin
+                ph_check                = {link_data[7:0], word_count_reg[7:0], data_id_reg};
+                rx_ecc                  = link_data[15:8];
+                data_id_reg_in          = corrected_ph[7:0];
+                word_count_reg_in       = corrected_ph[23:8];
+                nstate                  = short_pkt_check_corrected ? IDLE : LONG_DATA;
+                sop_in                  = short_pkt_corrected_cond;
+                valid_in                = short_pkt_corrected_cond;
+                byte_count_in           = 'd0;
+              end
+            end
+          end
+        endcase
+      end
     end
     
     
     //-------------------------------------------
     //Only in ONE_LANE mode and 8bit
     HEADER_ECC : begin
-      case(active_lanes)
-        ONE_LANE : begin
-          if(DATA_WIDTH==8) begin
-            ph_check                = {word_count_reg, data_id_reg};
-            rx_ecc                  = link_data[7:0];
-            data_id_reg_in          = corrected_ph[7:0];
-            word_count_reg_in       = corrected_ph[23:8];
-            nstate                  = short_pkt_check_corrected ? IDLE : LONG_DATA;
-            sop_in                  = short_pkt_corrected_cond;
-            valid_in                = short_pkt_corrected_cond;
-            byte_count_in           = 'd0;
+      if(ll_rx_valid) begin
+        case(active_lanes)
+          ONE_LANE : begin
+            if(DATA_WIDTH==8) begin
+              ph_check                = {word_count_reg, data_id_reg};
+              rx_ecc                  = link_data[7:0];
+              data_id_reg_in          = corrected_ph[7:0];
+              word_count_reg_in       = corrected_ph[23:8];
+              nstate                  = short_pkt_check_corrected ? IDLE : LONG_DATA;
+              sop_in                  = short_pkt_corrected_cond;
+              valid_in                = short_pkt_corrected_cond;
+              byte_count_in           = 'd0;
+            end
           end
-        end
-      endcase
+        endcase
+      end
     end
     
     
     //-------------------------------------------
     LONG_DATA : begin
       crc_init                        = 1'b0;
-      case(active_lanes)
-        ONE_LANE : begin
-          if(DATA_WIDTH==8) begin
-            crc_valid               = 'h1;
-            if(APP_DATA_BYTES == 1) begin
-              app_data_reg_in[7:0] = link_data[7:0];
-            end else begin
-              app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 8] = link_data[7:0];
-            end
-            crc_input[ 7: 0]        = link_data[7:0];
-            valid_in                = APP_DATA_BYTES == 1 ? 1'b1 : &byte_count[APP_DATA_BYTES_CLOG2-1:0];
-            byte_count_in           = byte_count + 'd1;
-            //if(byte_count == ending_byte_count) begin
-            if(byte_count_in >= word_count_reg) begin
-              nstate                = CRC0;
-              valid_in              = 1'b0;
-            end
-          end
-
-
-
-          if(DATA_WIDTH==16) begin
-            crc_valid               = 'h3;
-            app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 16] = link_data[15:0];
-            crc_input[15: 0]        = link_data[15:0];
-            valid_in                = byte_count[APP_DATA_BYTES_CLOG2-1:0] == {{APP_DATA_BYTES_CLOG2-1{1'b1}}, 1'b0};
-            byte_count_in           = byte_count + 'd2;
-            if(byte_count_in >= word_count_reg) begin
-              valid_in              = 1'b0;
-              if(word_count_reg[0]) begin
-                //check lower byte CRC
-                nstate              = CRC1;
-                //crc_valid           = 'd1;
-                crc_corrupted_in    = link_data[15:8] != crc_next[7:0];
-              end else begin
-                nstate              = CRC0;
-              end
-              byte_count_in         = 'd0;
-            end
-          end
-        end
-        
-        
-        TWO_LANE : begin
-          if(NUM_LANES >= 2) begin
+      if(ll_rx_valid) begin
+        case(active_lanes)
+          ONE_LANE : begin
             if(DATA_WIDTH==8) begin
+              crc_valid               = 'h1;
+              if(APP_DATA_BYTES == 1) begin
+                app_data_reg_in[7:0] = link_data[7:0];
+              end else begin
+                app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 8] = link_data[7:0];
+              end
+              crc_input[ 7: 0]        = link_data[7:0];
+              valid_in                = APP_DATA_BYTES == 1 ? 1'b1 : &byte_count[APP_DATA_BYTES_CLOG2-1:0];
+              byte_count_in           = byte_count + 'd1;
+              //if(byte_count == ending_byte_count) begin
+              if(byte_count_in >= word_count_reg) begin
+                nstate                = CRC0;
+                valid_in              = 1'b0;
+              end
+            end
+
+
+
+            if(DATA_WIDTH==16) begin
               crc_valid               = 'h3;
               app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 16] = link_data[15:0];
               crc_input[15: 0]        = link_data[15:0];
-              valid_in                = byte_count[APP_DATA_BYTES_CLOG2-1:0] == {{APP_DATA_BYTES_CLOG2-1{1'b1}}, 1'b0};//byte_count[1];
+              valid_in                = byte_count[APP_DATA_BYTES_CLOG2-1:0] == {{APP_DATA_BYTES_CLOG2-1{1'b1}}, 1'b0};
               byte_count_in           = byte_count + 'd2;
               if(byte_count_in >= word_count_reg) begin
-
                 valid_in              = 1'b0;
                 if(word_count_reg[0]) begin
                   //check lower byte CRC
                   nstate              = CRC1;
-                  crc_valid           = 'd1;
+                  //crc_valid           = 'd1;
                   crc_corrupted_in    = link_data[15:8] != crc_next[7:0];
                 end else begin
                   nstate              = CRC0;
@@ -877,557 +860,571 @@ always @(*) begin
                 byte_count_in         = 'd0;
               end
             end
+          end
 
 
-            if(DATA_WIDTH==16) begin
-              crc_valid               = 'hf;
-              app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = {link_data[31:24],
-                                                                                 link_data[15: 8],
-                                                                                 link_data[23:16],
-                                                                                 link_data[ 7: 0]};
-              crc_input[31: 0]        = {link_data[31:24],
-                                         link_data[15: 8],
-                                         link_data[23:16],
-                                         link_data[ 7: 0]};
+          TWO_LANE : begin
+            if(NUM_LANES >= 2) begin
+              if(DATA_WIDTH==8) begin
+                crc_valid               = 'h3;
+                app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 16] = link_data[15:0];
+                crc_input[15: 0]        = link_data[15:0];
+                valid_in                = byte_count[APP_DATA_BYTES_CLOG2-1:0] == {{APP_DATA_BYTES_CLOG2-1{1'b1}}, 1'b0};//byte_count[1];
+                byte_count_in           = byte_count + 'd2;
+                if(byte_count_in >= word_count_reg) begin
 
-              valid_in                = byte_count[APP_DATA_BYTES_CLOG2-1:0] == {{APP_DATA_BYTES_CLOG2-2{1'b1}}, 2'b00};
-              byte_count_in           = byte_count + 'd4;
-              if(byte_count_in >= word_count_reg) begin
-                //valid_in              = 1'b1;
-                case(word_count_reg[1:0]) 
-                  2'b00 : begin   //even boundary
-                    nstate            = CRC0;
-                    valid_in          = 1'b0;
+                  valid_in              = 1'b0;
+                  if(word_count_reg[0]) begin
+                    //check lower byte CRC
+                    nstate              = CRC1;
+                    crc_valid           = 'd1;
+                    crc_corrupted_in    = link_data[15:8] != crc_next[7:0];
+                  end else begin
+                    nstate              = CRC0;
                   end
-                  2'b01 : begin   //crc should be in bytes 2/1, byte 3 all zero
-                    crc_corrupted_in  = crc_next[15:0] != {link_data[15:8], link_data[23:16]};
-                    valid_in          = 1'b1;
-                    nstate            = IDLE;
-                    app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8] = 8'd0;
-                    app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8] = 8'd0;
-                    app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8] = 8'd0;
-                  end
-                  2'b10 : begin   //crc should be in bytes 3/2
-                    crc_corrupted_in  = crc_next[31:16] != {link_data[31:24], link_data[15:8]};
-                    valid_in          = 1'b1;
-                    nstate            = IDLE;
-                    app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8] = 8'd0;
-                    app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8] = 8'd0;
-                  end
-                  2'b11 : begin   //lower CRC in byte3
-                    crc_corr_prev_in  = crc_next[39:32] != link_data[31:24];
-                    valid_in          = 1'b0;
-                    nstate            = CRC1;
-                    app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8] = 8'd0;
-                  end
-                endcase 
-                byte_count_in         = 'd0;
+                  byte_count_in         = 'd0;
+                end
+              end
+
+
+              if(DATA_WIDTH==16) begin
+                crc_valid               = 'hf;
+                app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = {link_data[31:24],
+                                                                                   link_data[15: 8],
+                                                                                   link_data[23:16],
+                                                                                   link_data[ 7: 0]};
+                crc_input[31: 0]        = {link_data[31:24],
+                                           link_data[15: 8],
+                                           link_data[23:16],
+                                           link_data[ 7: 0]};
+
+                valid_in                = byte_count[APP_DATA_BYTES_CLOG2-1:0] == {{APP_DATA_BYTES_CLOG2-2{1'b1}}, 2'b00};
+                byte_count_in           = byte_count + 'd4;
+                if(byte_count_in >= word_count_reg) begin
+                  //valid_in              = 1'b1;
+                  case(word_count_reg[1:0]) 
+                    2'b00 : begin   //even boundary
+                      nstate            = CRC0;
+                      valid_in          = 1'b0;
+                    end
+                    2'b01 : begin   //crc should be in bytes 2/1, byte 3 all zero
+                      crc_corrupted_in  = crc_next[15:0] != {link_data[15:8], link_data[23:16]};
+                      valid_in          = 1'b1;
+                      nstate            = IDLE;
+                      app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8] = 8'd0;
+                      app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8] = 8'd0;
+                      app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8] = 8'd0;
+                    end
+                    2'b10 : begin   //crc should be in bytes 3/2
+                      crc_corrupted_in  = crc_next[31:16] != {link_data[31:24], link_data[15:8]};
+                      valid_in          = 1'b1;
+                      nstate            = IDLE;
+                      app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8] = 8'd0;
+                      app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8] = 8'd0;
+                    end
+                    2'b11 : begin   //lower CRC in byte3
+                      crc_corr_prev_in  = crc_next[39:32] != link_data[31:24];
+                      valid_in          = 1'b0;
+                      nstate            = CRC1;
+                      app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8] = 8'd0;
+                    end
+                  endcase 
+                  byte_count_in         = 'd0;
+                end
               end
             end
           end
-        end
-        
-        
-        FOUR_LANE : begin
-          if(NUM_LANES >= 4) begin
-            if(DATA_WIDTH==8) begin
-              crc_valid               = 'hf;
-              app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = link_data[31:0];
-              crc_input[31: 0]        = link_data[31:0];
-              valid_in                = byte_count[APP_DATA_BYTES_CLOG2-1:0] == {{APP_DATA_BYTES_CLOG2-2{1'b1}}, 2'b00};
-              byte_count_in           = byte_count + 'd4;
-              if(byte_count_in >= word_count_reg) begin
-                //valid_in              = 1'b1;
-                case(word_count_reg[1:0]) 
-                  2'b00 : begin   //even boundary
-                    nstate            = CRC0;
-                    valid_in          = 1'b0;
-                  end
-                  2'b01 : begin   //crc should be in bytes 2/1, byte 3 all zero
-                    crc_corrupted_in  = crc_next[15:0] != link_data[23:8];
-                    valid_in          = 1'b1;
-                    nstate            = IDLE;
-                    app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = {24'd0, link_data[7:0]};
-                  end
-                  2'b10 : begin   //crc should be in bytes 3/2
-                    crc_corrupted_in  = crc_next[31:16] != link_data[31:16];
-                    valid_in          = 1'b1;
-                    nstate            = IDLE;
-                    app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = {16'd0, link_data[15:0]};
-                  end
-                  2'b11 : begin   //lower CRC in byte3
-                    crc_corr_prev_in  = crc_next[39:32] != link_data[31:24];
-                    valid_in          = 1'b0;
-                    nstate            = CRC1;
-                    app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = {8'd0, link_data[23:0]};
-                  end
-                endcase 
-                byte_count_in         = 'd0;
-              end
-            end
 
 
-            if(DATA_WIDTH==16) begin
-              crc_valid               = 'hff;
-              byte_count_in           = byte_count + 'd8;
-              crc_input[63: 0]        = {link_data[63:56],
-                                         link_data[47:40],
-                                         link_data[31:24],
-                                         link_data[15: 8],
-                                         link_data[55:48],
-                                         link_data[39:32],
-                                         link_data[23:16],
-                                         link_data[ 7: 0]};
-              valid_in                = (APP_DATA_BYTES - byte_count[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
-              if(valid_prev) begin
-                app_data_reg_in        = {APP_DATA_BYTES{8'h00}};
-                app_data_reg_in[ 7: 0] = app_data_saved[ 7: 0];
-                app_data_reg_in[15: 8] = app_data_saved[15: 8];
-                app_data_reg_in[23:16] = app_data_saved[23:16];
-                app_data_reg_in[31:24] = app_data_saved[31:24];
-              end 
-
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8] = link_data[ 7: 0];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8] = link_data[23:16];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8] = link_data[39:32];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8] = link_data[55:48];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8] = link_data[15: 8];  
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8] = link_data[31:24];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8] = link_data[47:40];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8] = link_data[63:56];
-
-              if(valid_in) begin
-                app_data_saved_in[ 7: 0] = link_data[15: 8];
-                app_data_saved_in[15: 8] = link_data[31:24];
-                app_data_saved_in[23:16] = link_data[47:40];
-                app_data_saved_in[31:24] = link_data[63:56];
+          FOUR_LANE : begin
+            if(NUM_LANES >= 4) begin
+              if(DATA_WIDTH==8) begin
+                crc_valid               = 'hf;
+                app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = link_data[31:0];
+                crc_input[31: 0]        = link_data[31:0];
+                valid_in                = byte_count[APP_DATA_BYTES_CLOG2-1:0] == {{APP_DATA_BYTES_CLOG2-2{1'b1}}, 2'b00};
+                byte_count_in           = byte_count + 'd4;
+                if(byte_count_in >= word_count_reg) begin
+                  //valid_in              = 1'b1;
+                  case(word_count_reg[1:0]) 
+                    2'b00 : begin   //even boundary
+                      nstate            = CRC0;
+                      valid_in          = 1'b0;
+                    end
+                    2'b01 : begin   //crc should be in bytes 2/1, byte 3 all zero
+                      crc_corrupted_in  = crc_next[15:0] != link_data[23:8];
+                      valid_in          = 1'b1;
+                      nstate            = IDLE;
+                      app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = {24'd0, link_data[7:0]};
+                    end
+                    2'b10 : begin   //crc should be in bytes 3/2
+                      crc_corrupted_in  = crc_next[31:16] != link_data[31:16];
+                      valid_in          = 1'b1;
+                      nstate            = IDLE;
+                      app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = {16'd0, link_data[15:0]};
+                    end
+                    2'b11 : begin   //lower CRC in byte3
+                      crc_corr_prev_in  = crc_next[39:32] != link_data[31:24];
+                      valid_in          = 1'b0;
+                      nstate            = CRC1;
+                      app_data_reg_in[(byte_count[APP_DATA_BYTES_CLOG2-1:0]*8) +: 32] = {8'd0, link_data[23:0]};
+                    end
+                  endcase 
+                  byte_count_in         = 'd0;
+                end
               end
 
 
-              if(byte_count_in >= word_count_reg) begin
-                //If we have more than 4bytes of data in this cycle, we need to send an updated
-                //app data now, then the next cycle we do the CRC update with the final 1-4 bytes
-                //from the saved data.
-                valid_in                  = 1'b1;
-                case(byte_count_in - word_count_reg)
-                  'd0 : begin //all 8bytes are data
-                    nstate                = CRC0;
-                  end
+              if(DATA_WIDTH==16) begin
+                crc_valid               = 'hff;
+                byte_count_in           = byte_count + 'd8;
+                crc_input[63: 0]        = {link_data[63:56],
+                                           link_data[47:40],
+                                           link_data[31:24],
+                                           link_data[15: 8],
+                                           link_data[55:48],
+                                           link_data[39:32],
+                                           link_data[23:16],
+                                           link_data[ 7: 0]};
+                valid_in                = (APP_DATA_BYTES - byte_count[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
+                if(valid_prev) begin
+                  app_data_reg_in        = {APP_DATA_BYTES{8'h00}};
+                  app_data_reg_in[ 7: 0] = app_data_saved[ 7: 0];
+                  app_data_reg_in[15: 8] = app_data_saved[15: 8];
+                  app_data_reg_in[23:16] = app_data_saved[23:16];
+                  app_data_reg_in[31:24] = app_data_saved[31:24];
+                end 
 
-                  'd1 : begin //7bytes are data
-                    crc_corr_prev_in      = crc_next[103:96] != link_data[63:56];
-                    nstate                = CRC1;
-                  end
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 8] = link_data[ 7: 0];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+1)*8) +: 8] = link_data[23:16];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+2)*8) +: 8] = link_data[39:32];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+3)*8) +: 8] = link_data[55:48];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 8] = link_data[15: 8];  
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+5)*8) +: 8] = link_data[31:24];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+6)*8) +: 8] = link_data[47:40];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+7)*8) +: 8] = link_data[63:56];
 
-                  'd2 : begin
-                    crc_corr_prev_in      = crc_next[95:80] != {link_data[63:56], link_data[47:40]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-
-                  'd3 : begin
-                    crc_corr_prev_in      = crc_next[79:64] != {link_data[47:40], link_data[31:24]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-
-                  'd4 : begin
-                    crc_corrupted_in      = crc_next[63:48] != {link_data[31:24], link_data[15: 8]};
-                    nstate                = IDLE;
-                  end
-
-                  'd5 : begin
-                    crc_corrupted_in      = crc_next[47:32] != {link_data[15: 8], link_data[55:48]};
-                    nstate                = IDLE;
-                  end
-
-                  'd6 : begin
-                    crc_corrupted_in      = crc_next[31:16] != {link_data[55:48], link_data[39:32]};
-                    nstate                = IDLE;
-                  end
-
-                  'd7 : begin
-                    crc_corrupted_in      = crc_next[15: 0] != {link_data[39:32], link_data[23:16]};
-                    nstate                = IDLE;
-                  end
-                endcase
-                byte_count_in             = 'd0;
-              end
-            end
-          end
-        end
-        
-        EIGHT_LANE : begin
-          if(NUM_LANES >= 8) begin
-            if(DATA_WIDTH==8) begin
-              crc_valid               = 'hff;
-              byte_count_in           = byte_count + 'd8;
-              crc_input[63: 0]        = link_data[63: 0];
-              
-              valid_in                = (APP_DATA_BYTES - byte_count[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
-              if(valid_prev) begin
-                app_data_reg_in        = {APP_DATA_BYTES{8'h00}};
-                app_data_reg_in[ 7: 0] = app_data_saved[ 7: 0];
-                app_data_reg_in[15: 8] = app_data_saved[15: 8];
-                app_data_reg_in[23:16] = app_data_saved[23:16];
-                app_data_reg_in[31:24] = app_data_saved[31:24];
-              end 
-              
-              //Lower 32bits always updated, upper only if not valid_in
-              //app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 64] = link_data[63: 0];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 32] = link_data[31: 0];
-              
-              if(valid_in) begin
-                app_data_saved_in[31: 0] = link_data[63:32];
-              end else begin
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 32] = link_data[63:32];
-              end
-              
-              if(byte_count_in >= word_count_reg) begin
-                valid_in                  = 1'b1;
-                case(byte_count_in - word_count_reg)
-                  'd0 : begin //all 8bytes are data
-                    //valid_in              = 1'b0;
-                    nstate                = CRC0;
-                  end
-
-                  'd1 : begin //7bytes are data
-                    crc_corr_prev_in      = crc_next[103:96] != link_data[63:56];
-                    nstate                = CRC1;
-                  end
-                  
-                  'd2 : begin
-                    crc_corr_prev_in      = crc_next[95:80] != link_data[63:48];
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-
-                  'd3 : begin
-                    crc_corr_prev_in      = crc_next[79:64] != link_data[55:40];
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-
-                  'd4 : begin
-                    crc_corrupted_in      = crc_next[63:48] != link_data[47:32];
-                    nstate                = IDLE;
-                  end
-
-                  'd5 : begin
-                    crc_corrupted_in      = crc_next[47:32] != link_data[39:24];
-                    nstate                = IDLE;
-                  end
-
-                  'd6 : begin
-                    crc_corrupted_in      = crc_next[31:16] != link_data[31:16];
-                    nstate                = IDLE;
-                  end
-
-                  'd7 : begin
-                    crc_corrupted_in      = crc_next[15: 0] != link_data[23: 8];
-                    nstate                = IDLE;
-                  end
-                endcase
-                byte_count_in         = 'd0;
-              end              
-            end
-            
-            if(DATA_WIDTH==16) begin
-              crc_valid               = 'hffff;
-              byte_count_in           = byte_count + 'd16;
-              crc_input[127:  0]      = {link_data[127:120],   
-                                         link_data[111:104],   
-                                         link_data[ 95: 88],   
-                                         link_data[ 79: 72],   
-                                         link_data[ 63: 56],   
-                                         link_data[ 47: 40],   
-                                         link_data[ 31: 24],   
-                                         link_data[ 15:  8],   
-                                         link_data[119:112],   
-                                         link_data[103: 96],   
-                                         link_data[ 87: 80],   
-                                         link_data[ 71: 64],   
-                                         link_data[ 55: 48],   
-                                         link_data[ 39: 32],   
-                                         link_data[ 23: 16],   
-                                         link_data[  7:  0]};  
-              
-              valid_in                = (APP_DATA_BYTES - byte_count[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
-              
-
-              if(valid_prev) begin
-                app_data_reg_in        = {APP_DATA_BYTES{8'h00}};
-                app_data_reg_in[95: 0] = app_data_saved[95: 0];
-              end
-
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 0)*8) +: 8] = link_data[  7:  0];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 1)*8) +: 8] = link_data[ 23: 16];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 2)*8) +: 8] = link_data[ 39: 32];
-              app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 3)*8) +: 8] = link_data[ 55: 48];
+                if(valid_in) begin
+                  app_data_saved_in[ 7: 0] = link_data[15: 8];
+                  app_data_saved_in[15: 8] = link_data[31:24];
+                  app_data_saved_in[23:16] = link_data[47:40];
+                  app_data_saved_in[31:24] = link_data[63:56];
+                end
 
 
-              if(valid_in) begin
-                app_data_saved_in[ 7: 0]  = link_data[ 71: 64];
-                app_data_saved_in[15: 8]  = link_data[ 87: 80];
-                app_data_saved_in[23:16]  = link_data[103: 96];
-                app_data_saved_in[31:24]  = link_data[119:112];
+                if(byte_count_in >= word_count_reg) begin
+                  //If we have more than 4bytes of data in this cycle, we need to send an updated
+                  //app data now, then the next cycle we do the CRC update with the final 1-4 bytes
+                  //from the saved data.
+                  valid_in                  = 1'b1;
+                  case(byte_count_in - word_count_reg)
+                    'd0 : begin //all 8bytes are data
+                      nstate                = CRC0;
+                    end
 
-                app_data_saved_in[39:32]  = link_data[ 15:  8];
-                app_data_saved_in[47:40]  = link_data[ 31: 24];
-                app_data_saved_in[55:48]  = link_data[ 47: 40];
-                app_data_saved_in[63:56]  = link_data[ 63: 56];
+                    'd1 : begin //7bytes are data
+                      crc_corr_prev_in      = crc_next[103:96] != link_data[63:56];
+                      nstate                = CRC1;
+                    end
 
-                app_data_saved_in[71:64]  = link_data[ 79: 72];
-                app_data_saved_in[79:72]  = link_data[ 95: 88];
-                app_data_saved_in[87:80]  = link_data[111:104];
-                app_data_saved_in[95:88]  = link_data[127:120];
-              end else begin
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 4)*8) +: 8] = link_data[ 71: 64];  
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 5)*8) +: 8] = link_data[ 87: 80];
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 6)*8) +: 8] = link_data[103: 96];
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 7)*8) +: 8] = link_data[119:112];
+                    'd2 : begin
+                      crc_corr_prev_in      = crc_next[95:80] != {link_data[63:56], link_data[47:40]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
 
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 8)*8) +: 8] = link_data[ 15:  8];
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 9)*8) +: 8] = link_data[ 31: 24];
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+10)*8) +: 8] = link_data[ 47: 40];
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+11)*8) +: 8] = link_data[ 63: 56];
+                    'd3 : begin
+                      crc_corr_prev_in      = crc_next[79:64] != {link_data[47:40], link_data[31:24]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
 
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+12)*8) +: 8] = link_data[ 79: 72];
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+13)*8) +: 8] = link_data[ 95: 88];
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+14)*8) +: 8] = link_data[111:104];
-                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+15)*8) +: 8] = link_data[127:120];
-              end
-              //--------------------
-              
-              
-              //--------------------
-              
-              if(byte_count_in >= word_count_reg) begin
-                valid_in                  = 1'b1;
-                case(byte_count_in - word_count_reg)
-                  'd0 : begin
-                    nstate                = CRC0;
-                  end
-                  
-                  'd1 : begin
-                    crc_corr_prev_in      = crc_next[231:224] != link_data[127:120];
-                    nstate                = CRC1;
-                  end
-                  
-                  'd2 : begin
-                    crc_corr_prev_in      = crc_next[223:208] != {link_data[127:120], link_data[111:104]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd3 : begin
-                    crc_corr_prev_in      = crc_next[207:192] != {link_data[111:104], link_data[ 95: 88]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd4 : begin
-                    crc_corr_prev_in      = crc_next[191:176] != {link_data[ 95: 88], link_data[ 79: 72]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd5 : begin
-                    crc_corr_prev_in      = crc_next[175:160] != {link_data[ 79: 72], link_data[ 63: 56]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd6 : begin
-                    crc_corr_prev_in      = crc_next[159:144] != {link_data[ 63: 56], link_data[ 47: 40]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd7 : begin
-                    crc_corr_prev_in      = crc_next[143:128] != {link_data[ 47: 40], link_data[ 31: 24]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd8 : begin
-                    crc_corr_prev_in      = crc_next[127:112] != {link_data[ 31: 24], link_data[ 15:  8]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd9 : begin
-                    crc_corr_prev_in      = crc_next[111: 96] != {link_data[ 15:  8], link_data[119:112]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd10 : begin
-                    crc_corr_prev_in      = crc_next[ 95: 80] != {link_data[119:112], link_data[103: 96]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd11 : begin
-                    crc_corr_prev_in      = crc_next[ 79: 64] != {link_data[103: 96], link_data[ 87: 80]};
-                    nstate                = IDLE;
-                    send_saved_in         = valid_cond;
-                  end
-                  
-                  'd12 : begin
-                    crc_corrupted_in      = crc_next[ 63: 48] != {link_data[ 87: 80], link_data[ 71: 64]};
-                    nstate                = IDLE;
-                  end
-                  
-                  'd13 : begin
-                    crc_corrupted_in      = crc_next[ 47: 32] != {link_data[ 71: 64], link_data[ 55: 48]};
-                    nstate                = IDLE;
-                  end
-                  
-                  'd14 : begin
-                    crc_corrupted_in      = crc_next[ 31: 16] != {link_data[ 55: 48], link_data[ 39: 32]};
-                    nstate                = IDLE;
-                  end
-                  
-                  'd15 : begin
-                    crc_corrupted_in      = crc_next[ 15:  0] != {link_data[ 39: 32], link_data[ 23: 16]};
-                    nstate                = IDLE;
-                  end
-                endcase
-                byte_count_in             = 'd0;
+                    'd4 : begin
+                      crc_corrupted_in      = crc_next[63:48] != {link_data[31:24], link_data[15: 8]};
+                      nstate                = IDLE;
+                    end
+
+                    'd5 : begin
+                      crc_corrupted_in      = crc_next[47:32] != {link_data[15: 8], link_data[55:48]};
+                      nstate                = IDLE;
+                    end
+
+                    'd6 : begin
+                      crc_corrupted_in      = crc_next[31:16] != {link_data[55:48], link_data[39:32]};
+                      nstate                = IDLE;
+                    end
+
+                    'd7 : begin
+                      crc_corrupted_in      = crc_next[15: 0] != {link_data[39:32], link_data[23:16]};
+                      nstate                = IDLE;
+                    end
+                  endcase
+                  byte_count_in             = 'd0;
+                end
               end
             end
           end
-        end
-        
-      endcase
-      sop_in                  = valid_in && ~sop_sent;
-      sop_sent_in             = valid_in ? 1'b1 : sop_sent;
+
+          EIGHT_LANE : begin
+            if(NUM_LANES >= 8) begin
+              if(DATA_WIDTH==8) begin
+                crc_valid               = 'hff;
+                byte_count_in           = byte_count + 'd8;
+                crc_input[63: 0]        = link_data[63: 0];
+
+                valid_in                = (APP_DATA_BYTES - byte_count[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
+                if(valid_prev) begin
+                  app_data_reg_in        = {APP_DATA_BYTES{8'h00}};
+                  app_data_reg_in[ 7: 0] = app_data_saved[ 7: 0];
+                  app_data_reg_in[15: 8] = app_data_saved[15: 8];
+                  app_data_reg_in[23:16] = app_data_saved[23:16];
+                  app_data_reg_in[31:24] = app_data_saved[31:24];
+                end 
+
+                //Lower 32bits always updated, upper only if not valid_in
+                //app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 64] = link_data[63: 0];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+0)*8) +: 32] = link_data[31: 0];
+
+                if(valid_in) begin
+                  app_data_saved_in[31: 0] = link_data[63:32];
+                end else begin
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+4)*8) +: 32] = link_data[63:32];
+                end
+
+                if(byte_count_in >= word_count_reg) begin
+                  valid_in                  = 1'b1;
+                  case(byte_count_in - word_count_reg)
+                    'd0 : begin //all 8bytes are data
+                      //valid_in              = 1'b0;
+                      nstate                = CRC0;
+                    end
+
+                    'd1 : begin //7bytes are data
+                      crc_corr_prev_in      = crc_next[103:96] != link_data[63:56];
+                      nstate                = CRC1;
+                    end
+
+                    'd2 : begin
+                      crc_corr_prev_in      = crc_next[95:80] != link_data[63:48];
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd3 : begin
+                      crc_corr_prev_in      = crc_next[79:64] != link_data[55:40];
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd4 : begin
+                      crc_corrupted_in      = crc_next[63:48] != link_data[47:32];
+                      nstate                = IDLE;
+                    end
+
+                    'd5 : begin
+                      crc_corrupted_in      = crc_next[47:32] != link_data[39:24];
+                      nstate                = IDLE;
+                    end
+
+                    'd6 : begin
+                      crc_corrupted_in      = crc_next[31:16] != link_data[31:16];
+                      nstate                = IDLE;
+                    end
+
+                    'd7 : begin
+                      crc_corrupted_in      = crc_next[15: 0] != link_data[23: 8];
+                      nstate                = IDLE;
+                    end
+                  endcase
+                  byte_count_in         = 'd0;
+                end              
+              end
+
+              if(DATA_WIDTH==16) begin
+                crc_valid               = 'hffff;
+                byte_count_in           = byte_count + 'd16;
+                crc_input[127:  0]      = {link_data[127:120],   
+                                           link_data[111:104],   
+                                           link_data[ 95: 88],   
+                                           link_data[ 79: 72],   
+                                           link_data[ 63: 56],   
+                                           link_data[ 47: 40],   
+                                           link_data[ 31: 24],   
+                                           link_data[ 15:  8],   
+                                           link_data[119:112],   
+                                           link_data[103: 96],   
+                                           link_data[ 87: 80],   
+                                           link_data[ 71: 64],   
+                                           link_data[ 55: 48],   
+                                           link_data[ 39: 32],   
+                                           link_data[ 23: 16],   
+                                           link_data[  7:  0]};  
+
+                valid_in                = (APP_DATA_BYTES - byte_count[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
+
+
+                if(valid_prev) begin
+                  app_data_reg_in        = {APP_DATA_BYTES{8'h00}};
+                  app_data_reg_in[95: 0] = app_data_saved[95: 0];
+                end
+
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 0)*8) +: 8] = link_data[  7:  0];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 1)*8) +: 8] = link_data[ 23: 16];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 2)*8) +: 8] = link_data[ 39: 32];
+                app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 3)*8) +: 8] = link_data[ 55: 48];
+
+
+                if(valid_in) begin
+                  app_data_saved_in[ 7: 0]  = link_data[ 71: 64];
+                  app_data_saved_in[15: 8]  = link_data[ 87: 80];
+                  app_data_saved_in[23:16]  = link_data[103: 96];
+                  app_data_saved_in[31:24]  = link_data[119:112];
+
+                  app_data_saved_in[39:32]  = link_data[ 15:  8];
+                  app_data_saved_in[47:40]  = link_data[ 31: 24];
+                  app_data_saved_in[55:48]  = link_data[ 47: 40];
+                  app_data_saved_in[63:56]  = link_data[ 63: 56];
+
+                  app_data_saved_in[71:64]  = link_data[ 79: 72];
+                  app_data_saved_in[79:72]  = link_data[ 95: 88];
+                  app_data_saved_in[87:80]  = link_data[111:104];
+                  app_data_saved_in[95:88]  = link_data[127:120];
+                end else begin
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 4)*8) +: 8] = link_data[ 71: 64];  
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 5)*8) +: 8] = link_data[ 87: 80];
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 6)*8) +: 8] = link_data[103: 96];
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 7)*8) +: 8] = link_data[119:112];
+
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 8)*8) +: 8] = link_data[ 15:  8];
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+ 9)*8) +: 8] = link_data[ 31: 24];
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+10)*8) +: 8] = link_data[ 47: 40];
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+11)*8) +: 8] = link_data[ 63: 56];
+
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+12)*8) +: 8] = link_data[ 79: 72];
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+13)*8) +: 8] = link_data[ 95: 88];
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+14)*8) +: 8] = link_data[111:104];
+                  app_data_reg_in[((byte_count[APP_DATA_BYTES_CLOG2-1:0]+15)*8) +: 8] = link_data[127:120];
+                end
+                //--------------------
+
+
+                //--------------------
+
+                if(byte_count_in >= word_count_reg) begin
+                  valid_in                  = 1'b1;
+                  case(byte_count_in - word_count_reg)
+                    'd0 : begin
+                      nstate                = CRC0;
+                    end
+
+                    'd1 : begin
+                      crc_corr_prev_in      = crc_next[231:224] != link_data[127:120];
+                      nstate                = CRC1;
+                    end
+
+                    'd2 : begin
+                      crc_corr_prev_in      = crc_next[223:208] != {link_data[127:120], link_data[111:104]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd3 : begin
+                      crc_corr_prev_in      = crc_next[207:192] != {link_data[111:104], link_data[ 95: 88]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd4 : begin
+                      crc_corr_prev_in      = crc_next[191:176] != {link_data[ 95: 88], link_data[ 79: 72]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd5 : begin
+                      crc_corr_prev_in      = crc_next[175:160] != {link_data[ 79: 72], link_data[ 63: 56]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd6 : begin
+                      crc_corr_prev_in      = crc_next[159:144] != {link_data[ 63: 56], link_data[ 47: 40]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd7 : begin
+                      crc_corr_prev_in      = crc_next[143:128] != {link_data[ 47: 40], link_data[ 31: 24]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd8 : begin
+                      crc_corr_prev_in      = crc_next[127:112] != {link_data[ 31: 24], link_data[ 15:  8]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd9 : begin
+                      crc_corr_prev_in      = crc_next[111: 96] != {link_data[ 15:  8], link_data[119:112]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd10 : begin
+                      crc_corr_prev_in      = crc_next[ 95: 80] != {link_data[119:112], link_data[103: 96]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd11 : begin
+                      crc_corr_prev_in      = crc_next[ 79: 64] != {link_data[103: 96], link_data[ 87: 80]};
+                      nstate                = IDLE;
+                      send_saved_in         = valid_cond;
+                    end
+
+                    'd12 : begin
+                      crc_corrupted_in      = crc_next[ 63: 48] != {link_data[ 87: 80], link_data[ 71: 64]};
+                      nstate                = IDLE;
+                    end
+
+                    'd13 : begin
+                      crc_corrupted_in      = crc_next[ 47: 32] != {link_data[ 71: 64], link_data[ 55: 48]};
+                      nstate                = IDLE;
+                    end
+
+                    'd14 : begin
+                      crc_corrupted_in      = crc_next[ 31: 16] != {link_data[ 55: 48], link_data[ 39: 32]};
+                      nstate                = IDLE;
+                    end
+
+                    'd15 : begin
+                      crc_corrupted_in      = crc_next[ 15:  0] != {link_data[ 39: 32], link_data[ 23: 16]};
+                      nstate                = IDLE;
+                    end
+                  endcase
+                  byte_count_in             = 'd0;
+                end
+              end
+            end
+          end
+
+        endcase
+        sop_in                  = valid_in && ~sop_sent;
+        sop_sent_in             = valid_in ? 1'b1 : sop_sent;
+      end
     end
     
     //-------------------------------------------
     CRC0 : begin
       crc_init                        = 1'b0;
-      case(active_lanes)
-        ONE_LANE : begin
-          if(DATA_WIDTH==8) begin
-            nstate                  = CRC1;
-            crc_corr_prev_in        = crc_reg[ 7: 0] != link_data[ 7: 0];
-          end
-
-          if(DATA_WIDTH==16) begin
-            nstate                  = IDLE;
-            crc_corrupted_in        = crc_reg[31:16] != link_data[15: 0];
-            valid_in                = 1'b1;
-          end
-        end
-        
-        //Come here in TWO_LANEs IF the word count is even
-        TWO_LANE : begin
-          if(NUM_LANES >= 2) begin
+      if(ll_rx_valid) begin
+        case(active_lanes)
+          ONE_LANE : begin
             if(DATA_WIDTH==8) begin
+              nstate                  = CRC1;
+              crc_corr_prev_in        = crc_reg[ 7: 0] != link_data[ 7: 0];
+            end
+
+            if(DATA_WIDTH==16) begin
               nstate                  = IDLE;
               crc_corrupted_in        = crc_reg[31:16] != link_data[15: 0];
               valid_in                = 1'b1;
             end
-
-            if(DATA_WIDTH==16) begin
-              nstate                  = IDLE;
-              crc_corrupted_in        = crc_reg[63:48] != {link_data[23:16], link_data[7: 0]};
-              valid_in                = 1'b1;
-            end
           end
-        end
-        
-        //Come here if on boundary
-        FOUR_LANE : begin
-          if(NUM_LANES >= 4) begin
-            if(DATA_WIDTH==8) begin
-              nstate                    = IDLE;
-              crc_corrupted_in          = crc_reg[63:48] != link_data[15: 0];
-              valid_in                  = 1'b1;
-            end
 
-            if(DATA_WIDTH==16) begin
-              nstate                    = IDLE;
-              crc_corrupted_in          = crc_reg[127:112] != {link_data[23:16], link_data[7: 0]};
-              valid_in                  = 1'b1;
-              if(valid_prev) begin
-                app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
-                app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
-                app_data_reg_in[15: 8]  = app_data_saved[15: 8];
-                app_data_reg_in[23:16]  = app_data_saved[23:16];
-                app_data_reg_in[31:24]  = app_data_saved[31:24];
+          //Come here in TWO_LANEs IF the word count is even
+          TWO_LANE : begin
+            if(NUM_LANES >= 2) begin
+              if(DATA_WIDTH==8) begin
+                nstate                  = IDLE;
+                crc_corrupted_in        = crc_reg[31:16] != link_data[15: 0];
+                valid_in                = 1'b1;
+              end
+
+              if(DATA_WIDTH==16) begin
+                nstate                  = IDLE;
+                crc_corrupted_in        = crc_reg[63:48] != {link_data[23:16], link_data[7: 0]};
+                valid_in                = 1'b1;
               end
             end
           end
-        end
-        
-        EIGHT_LANE : begin
-          if(NUM_LANES >= 8) begin
-            if(DATA_WIDTH==8) begin
-              nstate                    = IDLE;
-              crc_corrupted_in          = crc_reg[127:112] != link_data[15: 0];
-              valid_in                  = 1'b1;
-              if(valid_prev) begin
-                app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
-                app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
-                app_data_reg_in[15: 8]  = app_data_saved[15: 8];
-                app_data_reg_in[23:16]  = app_data_saved[23:16];
-                app_data_reg_in[31:24]  = app_data_saved[31:24];
+
+          //Come here if on boundary
+          FOUR_LANE : begin
+            if(NUM_LANES >= 4) begin
+              if(DATA_WIDTH==8) begin
+                nstate                    = IDLE;
+                crc_corrupted_in          = crc_reg[63:48] != link_data[15: 0];
+                valid_in                  = 1'b1;
               end
-            end
-            
-            if(DATA_WIDTH==16) begin
-              nstate                    = IDLE;
-              crc_corrupted_in          = crc_reg[255:240] != {link_data[23:16], link_data[ 7: 0]};
-              valid_in                  = 1'b1;
-              if(valid_prev) begin  //this should ALSO handle the send_saved situations
-                app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
-                app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
-                app_data_reg_in[15: 8]  = app_data_saved[15: 8];
-                app_data_reg_in[23:16]  = app_data_saved[23:16];
-                app_data_reg_in[31:24]  = app_data_saved[31:24];
 
-                app_data_reg_in[39:32]  = app_data_saved[39:32];
-                app_data_reg_in[47:40]  = app_data_saved[47:40];
-                app_data_reg_in[55:48]  = app_data_saved[55:48];
-                app_data_reg_in[63:56]  = app_data_saved[63:56];
-
-                app_data_reg_in[71:64]  = app_data_saved[71:64];
-                app_data_reg_in[79:72]  = app_data_saved[79:72];
-                app_data_reg_in[87:80]  = app_data_saved[87:80];
-                app_data_reg_in[95:88]  = app_data_saved[95:88];
+              if(DATA_WIDTH==16) begin
+                nstate                    = IDLE;
+                crc_corrupted_in          = crc_reg[127:112] != {link_data[23:16], link_data[7: 0]};
+                valid_in                  = 1'b1;
+                if(valid_prev) begin
+                  app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
+                  app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
+                  app_data_reg_in[15: 8]  = app_data_saved[15: 8];
+                  app_data_reg_in[23:16]  = app_data_saved[23:16];
+                  app_data_reg_in[31:24]  = app_data_saved[31:24];
+                end
               end
             end
           end
-        end
-      endcase
-      //In the case of small long packets, we could come here before ever sending SOP
-      //so this check will ensure the SOP has been sent properly
-      sop_in                  = valid_in && ~sop_sent;
-      sop_sent_in             = valid_in ? 1'b1 : sop_sent;
+
+          EIGHT_LANE : begin
+            if(NUM_LANES >= 8) begin
+              if(DATA_WIDTH==8) begin
+                nstate                    = IDLE;
+                crc_corrupted_in          = crc_reg[127:112] != link_data[15: 0];
+                valid_in                  = 1'b1;
+                if(valid_prev) begin
+                  app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
+                  app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
+                  app_data_reg_in[15: 8]  = app_data_saved[15: 8];
+                  app_data_reg_in[23:16]  = app_data_saved[23:16];
+                  app_data_reg_in[31:24]  = app_data_saved[31:24];
+                end
+              end
+
+              if(DATA_WIDTH==16) begin
+                nstate                    = IDLE;
+                crc_corrupted_in          = crc_reg[255:240] != {link_data[23:16], link_data[ 7: 0]};
+                valid_in                  = 1'b1;
+                if(valid_prev) begin  //this should ALSO handle the send_saved situations
+                  app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
+                  app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
+                  app_data_reg_in[15: 8]  = app_data_saved[15: 8];
+                  app_data_reg_in[23:16]  = app_data_saved[23:16];
+                  app_data_reg_in[31:24]  = app_data_saved[31:24];
+
+                  app_data_reg_in[39:32]  = app_data_saved[39:32];
+                  app_data_reg_in[47:40]  = app_data_saved[47:40];
+                  app_data_reg_in[55:48]  = app_data_saved[55:48];
+                  app_data_reg_in[63:56]  = app_data_saved[63:56];
+
+                  app_data_reg_in[71:64]  = app_data_saved[71:64];
+                  app_data_reg_in[79:72]  = app_data_saved[79:72];
+                  app_data_reg_in[87:80]  = app_data_saved[87:80];
+                  app_data_reg_in[95:88]  = app_data_saved[95:88];
+                end
+              end
+            end
+          end
+        endcase
+        //In the case of small long packets, we could come here before ever sending SOP
+        //so this check will ensure the SOP has been sent properly
+        sop_in                  = valid_in && ~sop_sent;
+        sop_sent_in             = valid_in ? 1'b1 : sop_sent;
+      end
     end
     
     //-------------------------------------------
     CRC1 : begin
-      case(active_lanes)
-        ONE_LANE : begin
-          if(DATA_WIDTH==8) begin
-            nstate                  = IDLE;
-            crc_corrupted_in        = (crc_reg[15: 8] != link_data[ 7: 0]) || crc_corr_prev;
-            valid_in                = 1'b1;
-          end
-
-          if(DATA_WIDTH==16) begin
-            nstate                  = IDLE;
-            crc_corrupted_in        = (crc_reg[15: 8] != link_data[ 7: 0]) || crc_corr_prev;
-            valid_in                = 1'b1;
-          end
-        end
-        
-        TWO_LANE : begin
-          if(NUM_LANES >= 2) begin
+      if(ll_rx_valid) begin
+        case(active_lanes)
+          ONE_LANE : begin
             if(DATA_WIDTH==8) begin
               nstate                  = IDLE;
               crc_corrupted_in        = (crc_reg[15: 8] != link_data[ 7: 0]) || crc_corr_prev;
@@ -1435,82 +1432,98 @@ always @(*) begin
             end
 
             if(DATA_WIDTH==16) begin
-              nstate                = IDLE;
-              crc_corrupted_in      = (crc_reg[47:40] != link_data[ 7: 0]) || crc_corr_prev;
-              valid_in              = 1'b1;
+              nstate                  = IDLE;
+              crc_corrupted_in        = (crc_reg[15: 8] != link_data[ 7: 0]) || crc_corr_prev;
+              valid_in                = 1'b1;
             end
           end
-        end
-        
-        //Come here only if a single byte remaining
-        FOUR_LANE : begin
-          if(NUM_LANES >= 4) begin
-            if(DATA_WIDTH==8) begin
-              nstate                = IDLE;
-              crc_corrupted_in      = (crc_reg[47:40] != link_data[ 7: 0]) || crc_corr_prev;
-              valid_in              = 1'b1;
-            end
 
-            if(DATA_WIDTH==16) begin
-              nstate                = IDLE;
-              crc_corrupted_in      = (crc_reg[111:104] != link_data[ 7: 0]) || crc_corr_prev;
-              valid_in              = 1'b1;
-              if(valid_prev) begin
-                app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
-                app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
-                app_data_reg_in[15: 8]  = app_data_saved[15: 8];
-                app_data_reg_in[23:16]  = app_data_saved[23:16];
-                app_data_reg_in[31:24]  = app_data_saved[31:24];
+          TWO_LANE : begin
+            if(NUM_LANES >= 2) begin
+              if(DATA_WIDTH==8) begin
+                nstate                  = IDLE;
+                crc_corrupted_in        = (crc_reg[15: 8] != link_data[ 7: 0]) || crc_corr_prev;
+                valid_in                = 1'b1;
+              end
+
+              if(DATA_WIDTH==16) begin
+                nstate                = IDLE;
+                crc_corrupted_in      = (crc_reg[47:40] != link_data[ 7: 0]) || crc_corr_prev;
+                valid_in              = 1'b1;
               end
             end
           end
-        end
-        
-        EIGHT_LANE : begin
-          if(NUM_LANES >= 8) begin
-            if(DATA_WIDTH==8) begin
-              nstate                = IDLE;
-              crc_corrupted_in      = (crc_reg[111:104] != link_data[ 7: 0]) || crc_corr_prev;      
-              valid_in              = 1'b1;
-              if(valid_prev) begin
-                app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
-                app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
-                app_data_reg_in[15: 8]  = app_data_saved[15: 8];
-                app_data_reg_in[23:16]  = app_data_saved[23:16];
-                app_data_reg_in[31:24]  = app_data_saved[31:24];
+
+          //Come here only if a single byte remaining
+          FOUR_LANE : begin
+            if(NUM_LANES >= 4) begin
+              if(DATA_WIDTH==8) begin
+                nstate                = IDLE;
+                crc_corrupted_in      = (crc_reg[47:40] != link_data[ 7: 0]) || crc_corr_prev;
+                valid_in              = 1'b1;
               end
-            end
-            
-            if(DATA_WIDTH==16) begin
-              nstate                = IDLE;
-              crc_corrupted_in      = (crc_reg[239:232] != link_data[ 7: 0]) || crc_corr_prev;
-              valid_in              = 1'b1;
-              if(valid_prev) begin
-                app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
-                app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
-                app_data_reg_in[15: 8]  = app_data_saved[15: 8];
-                app_data_reg_in[23:16]  = app_data_saved[23:16];
-                app_data_reg_in[31:24]  = app_data_saved[31:24];
 
-                app_data_reg_in[39:32]  = app_data_saved[39:32];
-                app_data_reg_in[47:40]  = app_data_saved[47:40];
-                app_data_reg_in[55:48]  = app_data_saved[55:48];
-                app_data_reg_in[63:56]  = app_data_saved[63:56];
-
-                app_data_reg_in[71:64]  = app_data_saved[71:64];
-                app_data_reg_in[79:72]  = app_data_saved[79:72];
-                app_data_reg_in[87:80]  = app_data_saved[87:80];
-                app_data_reg_in[95:88]  = app_data_saved[95:88];
+              if(DATA_WIDTH==16) begin
+                nstate                = IDLE;
+                crc_corrupted_in      = (crc_reg[111:104] != link_data[ 7: 0]) || crc_corr_prev;
+                valid_in              = 1'b1;
+                if(valid_prev) begin
+                  app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
+                  app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
+                  app_data_reg_in[15: 8]  = app_data_saved[15: 8];
+                  app_data_reg_in[23:16]  = app_data_saved[23:16];
+                  app_data_reg_in[31:24]  = app_data_saved[31:24];
+                end
               end
             end
           end
-        end
-        
-      endcase
-      //In the case of small long packets, we could come here before ever sending SOP
-      //so this check will ensure the SOP has been sent properly
-      sop_in                  = valid_in && ~sop_sent;
-      sop_sent_in             = valid_in ? 1'b1 : sop_sent;
+
+          EIGHT_LANE : begin
+            if(NUM_LANES >= 8) begin
+              if(DATA_WIDTH==8) begin
+                nstate                = IDLE;
+                crc_corrupted_in      = (crc_reg[111:104] != link_data[ 7: 0]) || crc_corr_prev;      
+                valid_in              = 1'b1;
+                if(valid_prev) begin
+                  app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
+                  app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
+                  app_data_reg_in[15: 8]  = app_data_saved[15: 8];
+                  app_data_reg_in[23:16]  = app_data_saved[23:16];
+                  app_data_reg_in[31:24]  = app_data_saved[31:24];
+                end
+              end
+
+              if(DATA_WIDTH==16) begin
+                nstate                = IDLE;
+                crc_corrupted_in      = (crc_reg[239:232] != link_data[ 7: 0]) || crc_corr_prev;
+                valid_in              = 1'b1;
+                if(valid_prev) begin
+                  app_data_reg_in         = {APP_DATA_BYTES{8'h00}};
+                  app_data_reg_in[ 7: 0]  = app_data_saved[ 7: 0];
+                  app_data_reg_in[15: 8]  = app_data_saved[15: 8];
+                  app_data_reg_in[23:16]  = app_data_saved[23:16];
+                  app_data_reg_in[31:24]  = app_data_saved[31:24];
+
+                  app_data_reg_in[39:32]  = app_data_saved[39:32];
+                  app_data_reg_in[47:40]  = app_data_saved[47:40];
+                  app_data_reg_in[55:48]  = app_data_saved[55:48];
+                  app_data_reg_in[63:56]  = app_data_saved[63:56];
+
+                  app_data_reg_in[71:64]  = app_data_saved[71:64];
+                  app_data_reg_in[79:72]  = app_data_saved[79:72];
+                  app_data_reg_in[87:80]  = app_data_saved[87:80];
+                  app_data_reg_in[95:88]  = app_data_saved[95:88];
+                end
+              end
+            end
+          end
+
+        endcase
+        //In the case of small long packets, we could come here before ever sending SOP
+        //so this check will ensure the SOP has been sent properly
+        sop_in                  = valid_in && ~sop_sent;
+        sop_sent_in             = valid_in ? 1'b1 : sop_sent;
+      end
     end
     
     

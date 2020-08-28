@@ -36,8 +36,22 @@ localparam  IDLE        = 'd0,
             STALL       = 'd4;
 
 
-localparam  SYNC_PAT = DATA_WIDTH == 8  ? 16'hff00 :
-                       DATA_WIDTH == 16 ? 32'hff00_ff00 : 64'hff00_ff00_ff00_ff00;
+localparam  SYNC_PAT_130   = DATA_WIDTH == 8  ? 16'hff00 :
+                             DATA_WIDTH == 16 ? 32'hff00_ff00 : 64'hff00_ff00_ff00_ff00;
+localparam  SYNC_PAT_130_B = DATA_WIDTH == 8  ? 15'h7f00 :
+                             DATA_WIDTH == 16 ? 31'h7f00_ff00 : 63'h7f00_ff00_ff00_ff00;
+                             
+localparam  SYNC_PAT_132   = DATA_WIDTH == 8  ? 16'hff00 :
+                             DATA_WIDTH == 16 ? 32'hff00_ff00 : 64'hff00_ff00_ff00_ff00;
+//Data width - 3
+localparam  SYNC_PAT_132_B = DATA_WIDTH == 8  ? 15'h7f00 :
+                             DATA_WIDTH == 16 ? 31'h7f00_ff00 : 63'h7f00_ff00_ff00_ff00;
+//Data width - 2
+localparam  SYNC_PAT_132_C = DATA_WIDTH == 8  ? 14'h3f00 :
+                             DATA_WIDTH == 16 ? 30'h3f00_ff00 : 62'h3f00_ff00_ff00_ff00;
+//Data width - 1
+localparam  SYNC_PAT_132_D = DATA_WIDTH == 8  ? 13'h1f00 :
+                             DATA_WIDTH == 16 ? 29'h1f00_ff00 : 61'h1f00_ff00_ff00_ff00;
 
 //encode mode 
 localparam  PCIE_MODE       = 2'b00,
@@ -56,14 +70,15 @@ localparam  PCIE_SKP_END    = 8'he1;
 reg   [DATA_WIDTH-1:0]          rxdata1, rxdata2;
 reg   [3:0]                     rxdata3;
 wire  [(DATA_WIDTH*3)-1:0]      data_comp;
-wire  [DATA_WIDTH+3:0]          data_out_sel [DATA_WIDTH-1:0];
+wire  [DATA_WIDTH+3:0]          data_out_sel [(DATA_WIDTH*2)-1:0];
 
 wire  [DATA_WIDTH-1:0]          aligned_data_index_check;
 
 reg   [$clog2(DATA_WIDTH)-1:0]  aligned_data_index;
 reg   [$clog2(DATA_WIDTH)-1:0]  aligned_data_index_in;
 reg                             aligned_data_index_check_valid;
-reg   [$clog2(DATA_WIDTH)-1:0]  current_alignment, current_alignment_in;
+reg   [$clog2(DATA_WIDTH):0]    current_alignment, current_alignment_in;
+reg   [$clog2(DATA_WIDTH):0]    start_alignment, start_alignment_in;
 reg   [3:0]                     byte_count, byte_count_in;
 wire  [3:0]                     byte_count_inc;
 wire  [3:0]                     byte_count_max;
@@ -91,6 +106,7 @@ always @(posedge clk or posedge reset) begin
     rxdata3             <= 'd0;
     aligned_data_index  <= 'd0;
     current_alignment   <= 'd0;
+    start_alignment     <= 'd0;
     byte_count          <= 'd0;
     os_count            <= 'd0;
     in_skp              <= 1'b0;
@@ -102,6 +118,7 @@ always @(posedge clk or posedge reset) begin
     rxdata3             <= enable ? rxdata2[DATA_WIDTH-1:DATA_WIDTH-4] : 4'd0;
     aligned_data_index  <= aligned_data_index_in;
     current_alignment   <= current_alignment_in;
+    start_alignment     <= start_alignment_in;
     byte_count          <= byte_count_in;
     os_count            <= os_count_in;
     in_skp              <= (state == STALL) ? 1'b0 : skp_seen ? 1'b1 : skp_end_seen ? 1'b0 : in_skp;
@@ -129,13 +146,33 @@ assign data_comp = {rx_data_in, rxdata1, rxdata2};
 genvar genloop;
 generate
   for(genloop = 0; genloop < DATA_WIDTH; genloop = genloop + 1) begin : gen_data_comp_check
-    assign aligned_data_index_check[genloop] = blockalign ? encode_mode == PCIE_MODE ? {SYNC_PAT, 2'b01}   == data_comp[genloop+(2*DATA_WIDTH)+1:genloop] :
-                                                            encode_mode == USB_MODE  ? {SYNC_PAT, 4'b1100} == data_comp[genloop+(2*DATA_WIDTH)+3:genloop] :
-                                                                                       custom_sync_pat     == data_comp[genloop+(2*DATA_WIDTH)+1:genloop] : 'd0;
-    //assign data_out_sel[genloop]             = encode_mode == USB_MODE  ? data_comp[genloop+(2*DATA_WIDTH)+3:genloop] :
-    //                                                                      data_comp[genloop+(2*DATA_WIDTH)+1:genloop];
-    assign data_out_sel[genloop]             = encode_mode == USB_MODE  ? data_comp[genloop+(DATA_WIDTH)+3:genloop] :
-                                                                          data_comp[genloop+(DATA_WIDTH)+1:genloop];
+    //On the last index (130, last 3 on 132), we actually cannot hit the full 2xDATA_WIDTH + SyncHeader. e.g. DATA_WIDTH == 16 128/130
+    //data_comp is 48bits. genloop = 15 would be searching for data_comp[48:15], so the top bit would be missed.
+    //So on the highest one, we just check one less bit. I'm assuming this should be sufficient, especially since we are
+    //already looking at twice the data
+    if(genloop == (DATA_WIDTH-1)) begin
+      assign aligned_data_index_check[genloop] = blockalign ? encode_mode == PCIE_MODE ? {SYNC_PAT_130_B, 2'b01}   == data_comp[genloop+(2*DATA_WIDTH)+0:genloop] :
+                                                                                         {SYNC_PAT_132_D, 4'b1100} == data_comp[genloop+(2*DATA_WIDTH)+0:genloop] : 'd0;
+    end else if(genloop == (DATA_WIDTH-2)) begin
+      assign aligned_data_index_check[genloop] = blockalign ? encode_mode == PCIE_MODE ? {SYNC_PAT_130, 2'b01}     == data_comp[genloop+(2*DATA_WIDTH)+1:genloop] :
+                                                                                         {SYNC_PAT_132_C, 4'b1100} == data_comp[genloop+(2*DATA_WIDTH)+1:genloop] : 'd0;
+    end else if(genloop == (DATA_WIDTH-3)) begin
+      assign aligned_data_index_check[genloop] = blockalign ? encode_mode == PCIE_MODE ? {SYNC_PAT_130, 2'b01}     == data_comp[genloop+(2*DATA_WIDTH)+1:genloop] :
+                                                                                         {SYNC_PAT_132_B, 4'b1100} == data_comp[genloop+(2*DATA_WIDTH)+2:genloop] : 'd0;
+    end else begin
+      assign aligned_data_index_check[genloop] = blockalign ? encode_mode == PCIE_MODE ? {SYNC_PAT_130, 2'b01}     == data_comp[genloop+(2*DATA_WIDTH)+1:genloop] :
+                                                                                         {SYNC_PAT_132, 4'b1100}   == data_comp[genloop+(2*DATA_WIDTH)+3:genloop] : 'd0;
+    end
+  end
+  
+  for(genloop = 0; genloop < (DATA_WIDTH*2); genloop = genloop + 1) begin : gen_data_out_sel
+    if(genloop == ((DATA_WIDTH*2)-1)) begin
+      //This one isn't really possible to hit, but tieoff to ensure no X's
+      assign data_out_sel[genloop]             = {DATA_WIDTH+4{1'b0}};
+    end else begin
+      assign data_out_sel[genloop]             = encode_mode == USB_MODE  ?         data_comp[genloop+DATA_WIDTH+3:genloop] :
+                                                                            {2'b00, data_comp[genloop+DATA_WIDTH+1:genloop]};
+    end
   end
   
 endgenerate
@@ -285,6 +322,7 @@ assign os_count_max       = (DATA_WIDTH == 8)  ? encode_mode == USB_MODE ? 'd1 :
 always @(*) begin
   nstate                        = state;
   current_alignment_in          = current_alignment;
+  start_alignment_in            = start_alignment;
   byte_count_in                 = byte_count;
   os_count_in                   = os_count;
   
@@ -302,25 +340,33 @@ always @(*) begin
     UNALIGNED : begin
       if((|aligned_data_index_check) && aligned_data_index_check_valid) begin
         current_alignment_in    = aligned_data_index_in;
+        start_alignment_in      = aligned_data_index_in;
         byte_count_in           = byte_count_inc;
         nstate                  = ALIGNED;
       end
     end
     
-    //----------------------------------
+    // ----------------------------------
+    // Hokay, so here is how this works
+    // We have the `start_alignment` that keeps up with the INITIAL bit alignment. We double the size of the data_out_sel
+    // so we can accomodate the worst case bit alignment of 15bits away. Now, you could just have the current_alignment be 4 bits
+    // and rotate, however the issue is that the rotation has to happen when the current_alignment "rolls over". Ideally, you want
+    // the first block you send out to be the cycle after data_valid has deasserted. So this requires you to only do the
+    // rotation after the OS count equals the number of blocks to send (4/8/16 depending on DATA_WIDTH). So we are 
+    // taking up a little more logic to handle that case.
+    //
+    // This is really done to ease the implementation of the deskew block. You can be assured that when the data is coming in, it's 
+    // always started relative to the other lanes datavalid's. This prevents you from having to accomodate deasserted data valids
+    // throughout various locations in the data stream.
+    //
     ALIGNED : begin
       if((byte_count == byte_count_max) ||
          (skp_end_seen && DATA_WIDTH == 32) ) begin //if skp_end seen and 32 bits then this is the end of the OS
         os_count_in             = os_count + 'd1;
         byte_count_in           = 'd0;
         current_alignment_in    = encode_mode == USB_MODE ? current_alignment + 'd4 : current_alignment + 'd2;
-        //Ok so here is the thing, and MAYBE I'm missing something, so prove me wrong. If you are at the END of the alignment
-        //which is denoted by a rollover in the count, this is the stall cycle. This causes the data valid to drop for a cycle
-        //without going through the total number of OS'es (i.e. 4 OS's in 8bit mode). I don't really think this is an issue. But
-        //I do know that some VIPs will complain about this. You can do special tricks to get around it. SLink is too cool for school
-        //though and we don't care :)
-        if(current_alignment_in < current_alignment) begin  //rollover
-        //if(os_count == os_count_max) begin
+        
+        if(os_count == os_count_max) begin
           os_count_in           = 'd0;
           nstate                = STALL;
         end
@@ -342,6 +388,7 @@ always @(*) begin
     
     //----------------------------------
     STALL : begin
+      current_alignment_in      = start_alignment;
       nstate                    = ALIGNED;
     end
     

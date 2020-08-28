@@ -1,4 +1,6 @@
-module slink_clk_control (
+module slink_clk_control #(
+  parameter   NUM_RX_LANES  = 4
+)(
   input  wire         core_scan_mode,
   input  wire         core_scan_clk,
   input  wire         core_scan_asyncrst_ctrl,
@@ -17,6 +19,10 @@ module slink_clk_control (
   
   output wire         refclk_scan,
   output wire         refclk_scan_reset,
+  
+  input  wire [NUM_RX_LANES-1:0]  rxclk_in,
+  output wire [NUM_RX_LANES-1:0]  rxclk_out,
+  output wire [NUM_RX_LANES-1:0]  rxclk_reset_out,
   
   output wire         link_clk,
   output wire         link_clk_reset
@@ -65,6 +71,25 @@ slink_reset_sync u_slink_reset_sync_main_reset_phy_clk (
   .scan_ctrl     ( core_scan_asyncrst_ctrl  ),      
   .reset_in      ( main_reset               ),      
   .reset_out     ( main_reset_phy_clk_scan  )); 
+
+
+
+genvar laneindex;
+generate
+  for(laneindex = 0; laneindex < NUM_RX_LANES; laneindex = laneindex + 1) begin : gen_rx_clock_muxes
+    slink_clock_mux u_slink_clock_mux_rxclk (
+      .clk0    ( rxclk_in[laneindex]  ),   
+      .clk1    ( core_scan_clk        ),   
+      .sel     ( core_scan_mode       ),   
+      .clk_out ( rxclk_out[laneindex] )); 
+
+    slink_reset_sync u_slink_reset_sync_rxclk_reset (
+      .clk           ( rxclk_out[laneindex]       ),      
+      .scan_ctrl     ( core_scan_asyncrst_ctrl    ),      
+      .reset_in      ( main_reset                 ),      
+      .reset_out     ( rxclk_reset_out[laneindex] )); 
+  end
+endgenerate
 
 
 wire link_clk_pre_scan;

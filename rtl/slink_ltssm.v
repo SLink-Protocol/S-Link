@@ -27,6 +27,7 @@ module slink_ltssm #(
   input  wire [15:0]                          px_clk_trail,
   input  wire [15:0]                          swi_clk_switch_time,
   input  wire [15:0]                          swi_p0_exit_time,
+  input  wire [7:0]                           attr_sync_freq,
   
   input  wire [2:0]                           active_rx_lanes,
   input  wire [2:0]                           active_tx_lanes,
@@ -75,6 +76,7 @@ module slink_ltssm #(
   
   // Data from Link Layer
   input  wire [(NUM_TX_LANES*DATA_WIDTH)-1:0] link_data,
+  output wire                                 ll_tx_valid,     
   
   // Data to Lane Stripe
   output wire [(NUM_TX_LANES*DATA_WIDTH)-1:0] ltssm_data,
@@ -135,8 +137,8 @@ wire                      phy_clk_ready_ff2;
 wire  [NUM_TX_LANES-1:0]  phy_tx_ready_ff2;
 wire  [NUM_RX_LANES-1:0]  phy_rx_ready_ff2;
 reg   [15:0]              count, count_in;
-reg   [3:0]               ts_byte_count, ts_byte_count_in;
-wire                      ts_byte_count_end;
+reg   [3:0]               byte_count, byte_count_in;
+wire                      byte_count_end;
 reg                       ltssm_data_active, ltssm_data_active_in;
 reg   [DATA_WIDTH-1:0]    ltssm_lane_data;
 reg                       phy_rx_align_reg, phy_rx_align_reg_in;
@@ -164,7 +166,17 @@ reg                       phy_clk_idle_in;
 reg                       enable_lanes, enable_lanes_in;
 reg                       effect_update_in;
 
-
+reg   [3:0]               block_count;
+reg   [3:0]               block_count_in;
+wire                      block_count_end;
+reg   [7:0]               sync_count;
+reg   [7:0]               sync_count_in;
+reg                       stall_cycle;
+reg                       stall_cycle_in;
+reg                       sending_sync;
+reg                       sending_sync_in;
+wire                      enable_gearbox;
+reg   [1:0]               tx_syncheader;
 
 
 
@@ -223,7 +235,7 @@ always @(posedge clk or posedge reset) begin
     state               <= IDLE;
     use_phy_clk         <= 1'b0;
     count               <= 'd0;
-    ts_byte_count       <= 'd0;
+    byte_count          <= 'd0;
     ltssm_data_active   <= 1'b1;
     phy_rx_align_reg    <= 1'b0;
     rx_ts1_count        <= 'd0;
@@ -239,11 +251,15 @@ always @(posedge clk or posedge reset) begin
     effect_update       <= 1'b0;
     in_px_state         <= 1'b0;
     in_reset_state      <= 1'b0;
+    block_count         <= 'd0;
+    sync_count          <= 'd0;
+    stall_cycle         <= 1'b0;
+    sending_sync        <= 1'b0;
   end else begin
     state               <= nstate;
     use_phy_clk         <= use_phy_clk_in;
     count               <= count_in;
-    ts_byte_count       <= ts_byte_count_in;
+    byte_count          <= byte_count_in;
     ltssm_data_active   <= ltssm_data_active_in;
     phy_rx_align_reg    <= phy_rx_align_reg_in;
     rx_ts1_count        <= rx_ts1_count_in;
@@ -259,37 +275,54 @@ always @(posedge clk or posedge reset) begin
     effect_update       <= effect_update_in;
     in_px_state         <= (state == P1) || (state == P2) || (state == P3);
     in_reset_state      <= (state == RESET_ENTER) || (state == RESET_ST);
+    block_count         <= block_count_in;
+    sync_count          <= sync_count_in;
+    stall_cycle         <= stall_cycle_in;
+    sending_sync        <= sending_sync_in;
   end
 end 
 
 assign ltssm_state        = state;
 
-assign ts_byte_count_end  = (DATA_WIDTH == 8)  ? (ts_byte_count == 'd15) :
-                            (DATA_WIDTH == 16) ? (ts_byte_count == 'd14) : (ts_byte_count == 'd12);
+
+assign enable_gearbox = (state == P0_TS1) ||
+                        (state == P0_TS2) ||
+                        (state == P0_SDS) ||
+                        (state == P0)     ||
+                        (state == P0_EXIT);
 
 always @(*) begin
-  case(DATA_WIDTH)
-    8 : begin
-      ltssm_lane_data     = (state == P0_TS1) ? ts_byte_count == 'd0 ? TSX_BYTE0 : TS1_BYTEX :
-                            (state == P0_TS2) ? ts_byte_count == 'd0 ? TSX_BYTE0 : TS2_BYTEX : 
-                            (state == P0_SDS) ? ts_byte_count == 'd0 ? SDS_BYTE0 : SDS_BYTEX : 8'h0;
+  if(enable_gearbox) begin
+    if(stall_cycle) begin
+      stall_cycle_in    = 1'b0;
+      byte_count_in     = 'd0;
+      block_count_in    = 'd0;
+    end else begin
+      byte_count_in     = byte_count_end ? 'd0 :
+                          (DATA_WIDTH ==  8) ? byte_count + 'd1 :
+                          (DATA_WIDTH == 16) ? byte_count + 'd2 : byte_count + 'd4;
+      block_count_in    = byte_count_end ? (block_count_end ? 'd0 : block_count + 'd1) : block_count;
+      stall_cycle_in    = byte_count_end && block_count_end;
     end
-    
-    16 : begin
-      ltssm_lane_data     = (state == P0_TS1) ? ts_byte_count == 'd0 ? {TS1_BYTEX, TSX_BYTE0} : {TS1_BYTEX, TS1_BYTEX} :
-                            (state == P0_TS2) ? ts_byte_count == 'd0 ? {TS2_BYTEX, TSX_BYTE0} : {TS2_BYTEX, TS2_BYTEX} : 
-                            (state == P0_SDS) ? ts_byte_count == 'd0 ? {SDS_BYTEX, SDS_BYTE0} : {SDS_BYTEX, SDS_BYTEX} :  16'h0;    
-    end
-  endcase
-  
-  if(state == P0_TS1 || state == P0_TS2 || state == P0_SDS) begin
-    ts_byte_count_in      = ts_byte_count_end   ? 'd0                 :
-                            (DATA_WIDTH == 8)   ? ts_byte_count + 'd1 :
-                            (DATA_WIDTH == 16)  ? ts_byte_count + 'd2 : 'd4;
   end else begin
-    ts_byte_count_in      = 'd0;
+    byte_count_in       = 'd0;
+    block_count_in      = 'd0;
+    stall_cycle_in      = 1'b0;
   end
 end
+                                    
+assign byte_count_end   = (DATA_WIDTH == 8)  ? (byte_count == 'd15) :
+                          (DATA_WIDTH == 16) ? (byte_count == 'd14) : (byte_count == 'd12);
+
+assign block_count_end  = (DATA_WIDTH == 8)  ? block_count == 'd3 :                  
+                          (DATA_WIDTH == 16) ? block_count == 'd7 : 'd15;
+
+
+assign tx_startblock    = enable_gearbox && (byte_count == 'd0) && ~stall_cycle;
+assign tx_datavalid     = enable_gearbox && ~stall_cycle;
+
+assign ll_tx_valid      = (tx_datavalid && (state == P0)) || sds_sent; //needs more than this
+
 
 
 assign rx_ts1_count_in  = (state == P0_TS1)                      ? (&rx_ts1_seen ? &rx_ts1_count ? rx_ts1_count : rx_ts1_count + 'd1 : rx_ts1_count) : 'd0;
@@ -323,6 +356,10 @@ always @(*) begin
   phy_clk_idle_in           = 1'b0;
   enable_lanes_in           = enable_lanes;
   effect_update_in          = 1'b0;
+  ltssm_lane_data           = {DATA_WIDTH{1'b0}};
+  sync_count_in             = sync_count;
+  sending_sync_in           = sending_sync;
+  tx_syncheader             = 2'b10;
   
   case(state)
     //--------------------------------------
@@ -358,6 +395,7 @@ always @(*) begin
         if(all_tx_ready && all_rx_ready) begin
           //need to add a check for P3 exit when we get to it
           nstate                = P0_TS1;   
+          sending_sync_in       = 1'b1;   //start with SYNC
           rx_sds_seen_reg_in    = 1'b0;
           phy_rx_align_reg_in   = 1'b1;
           count_in              = 'd0;
@@ -371,39 +409,109 @@ always @(*) begin
     
     //--------------------------------------
     P0_TS1 : begin
-      deskew_enable_in          = 1'b1;
-      phy_rx_align_reg_in       = 1'b1;
-      if(ts_byte_count_end) begin
-        if((count == px_ts1_tx_count) || rx_p0_ts2_qualifier) begin
-          if((rx_ts1_count >= px_ts1_rx_count) || rx_p0_ts2_qualifier) begin    //if we have seen N TS1 OR any TS2
-            nstate              = P0_TS2;
-            phy_rx_align_reg_in = 1'b0;
-            count_in            = 'd0;
+      deskew_enable_in            = 1'b1;
+      phy_rx_align_reg_in         = 1'b1;
+      if(byte_count_end) begin
+        sending_sync_in           = sync_count == attr_sync_freq;
+        if(~sending_sync) begin
+          sync_count_in         = sync_count + 'd1;
+          if((count >= px_ts1_tx_count) || rx_p0_ts2_qualifier) begin
+            if((rx_ts1_count >= px_ts1_rx_count) || rx_p0_ts2_qualifier) begin    //if we have seen N TS1 OR any TS2
+              nstate              = P0_TS2;
+              phy_rx_align_reg_in = 1'b0;
+              count_in            = 'd0;
+              //sync_count_in       = sync_count + 'd1;
+            end else begin
+              count_in            = count;
+              //sync_count_in       = sync_count + 'd1;
+            end
           end else begin
-            count_in            = count;
+            count_in              = count + 'd1;
+            //sync_count_in         = sync_count + 'd1;
           end
         end else begin
-          count_in              = count + 'd1;
+          sending_sync_in         = 1'b0;
+          sync_count_in           = 'd1;
         end
       end 
+      
+      tx_syncheader               = 2'b01;
+      if(sending_sync) begin
+        if(DATA_WIDTH==8) begin
+          ltssm_lane_data = byte_count[0] ? SNYC_B1 : SNYC_B0;
+        end
+        
+        if(DATA_WIDTH==16) begin
+          ltssm_lane_data = {SNYC_B1, SNYC_B0};
+        end
+      end else begin
+        if(DATA_WIDTH==8) begin
+          case(byte_count)
+            0       : ltssm_lane_data = TSX_BYTE0;
+            default : ltssm_lane_data = TS1_BYTEX;
+          endcase
+        end
+        
+        if(DATA_WIDTH==16) begin
+          case(byte_count)
+            0       : ltssm_lane_data = {TS1_BYTEX, TSX_BYTE0};
+            default : ltssm_lane_data = {2{TS1_BYTEX}};
+          endcase
+        end
+      end
     end
     
     
     //--------------------------------------
     P0_TS2 : begin
-      if(ts_byte_count_end) begin
-        if(count == px_ts2_tx_count || rx_p0_sds_qualifier) begin
-          if((rx_ts2_count >= px_ts2_rx_count) || rx_p0_sds_qualifier) begin    //if we have seen N TS2 OR the SDS
-            nstate              = P0_SDS;
-            count_in            = 'd0;
-            //rx_sds_seen_reg_in  = 1'b0; 
+      if(byte_count_end) begin
+        sending_sync_in           = sync_count == attr_sync_freq;
+        if(~sending_sync) begin
+          if(count >= px_ts2_tx_count || rx_p0_sds_qualifier) begin
+            if((rx_ts2_count >= px_ts2_rx_count) || rx_p0_sds_qualifier) begin    //if we have seen N TS2 OR the SDS
+              nstate              = P0_SDS;
+              count_in            = 'd0;
+              //rx_sds_seen_reg_in  = 1'b0; 
+            end else begin
+              count_in            = count;
+              sync_count_in       = sync_count + 'd1;
+            end
           end else begin
-            count_in            = count;
-          end
+            count_in              = count + 'd1;
+            sync_count_in         = sync_count + 'd1;
+          end 
         end else begin
-          count_in              = count + 'd1;
+          sending_sync_in       = 1'b0;
+          sync_count_in         = 'd1;
         end
       end
+      
+      
+      tx_syncheader               = 2'b01;
+      if(sending_sync) begin
+        if(DATA_WIDTH==8) begin
+          ltssm_lane_data = byte_count[0] ? SNYC_B1 : SNYC_B0;
+        end
+        
+        if(DATA_WIDTH==16) begin
+          ltssm_lane_data = {SNYC_B1, SNYC_B0};
+        end
+      end else begin
+        if(DATA_WIDTH==8) begin
+          case(byte_count)
+            0       : ltssm_lane_data = TSX_BYTE0;
+            default : ltssm_lane_data = TS2_BYTEX;
+          endcase
+        end
+        
+        if(DATA_WIDTH==16) begin
+          case(byte_count)
+            0       : ltssm_lane_data = {TS2_BYTEX, TSX_BYTE0};
+            default : ltssm_lane_data = {2{TS2_BYTEX}};
+          endcase
+        end
+      end
+      
       
       if(rx_sds_seen[0]) begin //FIXME
         rx_sds_seen_reg_in      = 1'b1;
@@ -412,7 +520,22 @@ always @(*) begin
     
     //--------------------------------------
     P0_SDS : begin
-      if(ts_byte_count_end) begin
+      tx_syncheader               = 2'b01;
+      if(DATA_WIDTH==8) begin
+        case(byte_count)
+          0       : ltssm_lane_data = SDS_BYTE0;
+          default : ltssm_lane_data = SDS_BYTEX;
+        endcase
+      end
+
+      if(DATA_WIDTH==16) begin
+        case(byte_count)
+          0       : ltssm_lane_data = {SDS_BYTEX, SDS_BYTE0};
+          default : ltssm_lane_data = {2{SDS_BYTEX}};
+        endcase
+      end
+    
+      if(byte_count_end) begin
         nstate                  = P0;
       end
     end
@@ -568,30 +691,57 @@ assign phy_rx_align     = {NUM_RX_LANES{phy_rx_align_reg}};
 assign sds_sent         = (state == P0_SDS) && (nstate == P0);
 
 
+
+
+wire [(NUM_TX_LANES*DATA_WIDTH)-1:0]    tx_gearbox_data;
 wire [(NUM_TX_LANES*DATA_WIDTH)-1:0]    ltssm_data_sel;
-reg  [(NUM_TX_LANES*DATA_WIDTH)-1:0]    ltssm_data_sel_reg;
+
 genvar laneindex;
+generate
+  for(laneindex = 0; laneindex < NUM_TX_LANES; laneindex = laneindex + 1) begin : gen_gearboxes
+    assign ltssm_data_sel[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] = laneindex < (1 << active_tx_lanes) ?  
+                                                                                 ((state != P0) && (state != P0_EXIT) ? ltssm_lane_data : link_data[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)]) : {DATA_WIDTH{1'b0}};
+  
+    slink_tx_gearbox_128b13xb #(
+      //parameters
+      .DATA_WIDTH         ( DATA_WIDTH )
+    ) u_slink_tx_gearbox_128b13xb (
+      .clk           ( clk                                                                ),  
+      .reset         ( reset                                                              ),  
+      .tx_data_in    ( ltssm_data_sel[((laneindex+1)*DATA_WIDTH)-1:laneindex*DATA_WIDTH]  ),
+      .tx_syncheader ( {2'b00, tx_syncheader}                                             ),  
+      .tx_startblock ( tx_startblock                                                      ),   
+      .tx_datavalid  ( tx_datavalid                                                       ),   
+      .enable        ( (enable_gearbox && phy_tx_en[laneindex])                           ),  
+      .encode_mode   ( 1'b0                                                               ),  
+      .tx_data_out   ( tx_gearbox_data[((laneindex+1)*DATA_WIDTH)-1:laneindex*DATA_WIDTH] ));  
+  end
+endgenerate
+
+
+
+
+
+reg  [(NUM_TX_LANES*DATA_WIDTH)-1:0]    tx_gearbox_data_reg;
+
 generate
   for(laneindex = 0; laneindex < NUM_TX_LANES; laneindex = laneindex + 1) begin : ltssm_data_select
     if(REGISTER_TXDATA) begin
       always @(posedge clk or posedge reset) begin
         if(reset) begin
-          ltssm_data_sel_reg      <= {(NUM_TX_LANES*DATA_WIDTH){1'b0}};
+          tx_gearbox_data_reg     <= {(NUM_TX_LANES*DATA_WIDTH){1'b0}};
         end else begin
-          ltssm_data_sel_reg      <= ltssm_data_sel;
+          tx_gearbox_data_reg     <= tx_gearbox_data;
         end
       end
       
     end
-    
-    assign ltssm_data_sel[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] =  laneindex < (1 << active_tx_lanes) ?  
-                                                                                  ((state != P0) && (state != P0_EXIT) ? ltssm_lane_data : link_data[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)]) : {DATA_WIDTH{1'b0}};
   end
   
   if(REGISTER_TXDATA) begin
-    assign ltssm_data   = ltssm_data_sel_reg;
+    assign ltssm_data   = tx_gearbox_data_reg;
   end else begin
-    assign ltssm_data   = ltssm_data_sel;
+    assign ltssm_data   = tx_gearbox_data;
   end
   
 endgenerate

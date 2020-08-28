@@ -13,15 +13,18 @@
 
 - [ ] Need to ensure we have defaults for all case statements.
 
+
+- [ ] Add a startblock/datavalid check to the output of the deskew to catch if something goes haywire
+
 ### Verification
 
-- [ ] There seems to be some sort of race condition when calling multiple sendRandom*Packet. Currently if I just add in a small 1ps delay
-      it appears to work as expected?
+- [x] There seems to be some sort of race condition when calling multiple sendRandom*Packet. Currently if I just add in a small 1ps delay
+      it appears to work as expected? This **should** be ok now
 
 - [ ] Need more tests for P states with additional error checking
 
 - [ ] Add more attribute checks for the hard_reset test. Also make this pick between master/slave for who issues the reset
-- [ ] Need some error condition checks for CRC/ECC
+- [x] Need some error condition checks for CRC/ECC (Added some ECC, need to see best way to do CRC)
 
 ### Synthesis/PD
 
