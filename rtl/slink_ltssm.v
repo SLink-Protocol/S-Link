@@ -40,10 +40,12 @@ module slink_ltssm #(
   output wire                                 sds_sent,
   output reg                                  deskew_enable,
   
-  input  wire                                 enter_px_state,
+  
   input  wire                                 link_p1_req,
   input  wire                                 link_p2_req,
   input  wire                                 link_p3_req,
+  input  wire                                 link_px_req_recv,
+  input  wire                                 link_px_start_recv,
   output reg                                  in_px_state,
   output reg                                  effect_update,
   
@@ -56,6 +58,13 @@ module slink_ltssm #(
   input  wire [9:0]                           attr_hard_reset_us,
   output wire                                 link_hard_reset_cond,
   output reg                                  in_reset_state,
+  
+  // Attribute
+  input  wire                                 attr_ready,
+  input  wire [15:0]                          attr_addr,
+  input  wire [15:0]                          attr_wdata,
+  input  wire                                 attr_write,
+  output reg                                  attr_sent,
   
     
   // SerDes Controls
@@ -76,7 +85,9 @@ module slink_ltssm #(
   
   // Data from Link Layer
   input  wire [(NUM_TX_LANES*DATA_WIDTH)-1:0] link_data,
+  input  wire                                 ll_tx_idle,
   output wire                                 ll_tx_valid,     
+  output reg                                  ll_enable,
   
   // Data to Lane Stripe
   output wire [(NUM_TX_LANES*DATA_WIDTH)-1:0] ltssm_data,
@@ -102,7 +113,10 @@ localparam    IDLE            = 'd0,
               P0_P3_CLK_TRAIL = 'd13,
               P3              = 'd14,
               RESET_ENTER     = 'd15,
-              RESET_ST        = 'd16;
+              RESET_ST        = 'd16,
+              PX_REQ_ST       = 'd17,
+              PX_START_ST     = 'd18,
+              ATTR_ST         = 'd19;
 
 `ifdef SIMULATION
 reg [8*40:1] state_name;
@@ -125,6 +139,9 @@ always @(*) begin
     P3              : state_name = "P3";
     RESET_ENTER     : state_name = "RESET_ENTER";
     RESET_ST        : state_name = "RESET_ST";
+    PX_REQ_ST       : state_name = "PX_REQ_ST";
+    PX_START_ST     : state_name = "PX_START_ST";
+    ATTR_ST         : state_name = "ATTR_ST";
   endcase
 end
 `endif
@@ -177,7 +194,7 @@ reg                       sending_sync;
 reg                       sending_sync_in;
 wire                      enable_gearbox;
 reg   [1:0]               tx_syncheader;
-
+reg                       ll_enable_in;
 
 
 slink_demet_reset u_slink_demet_reset_enable (
@@ -255,6 +272,7 @@ always @(posedge clk or posedge reset) begin
     sync_count          <= 'd0;
     stall_cycle         <= 1'b0;
     sending_sync        <= 1'b0;
+    ll_enable           <= 1'b0;
   end else begin
     state               <= nstate;
     use_phy_clk         <= use_phy_clk_in;
@@ -279,16 +297,20 @@ always @(posedge clk or posedge reset) begin
     sync_count          <= sync_count_in;
     stall_cycle         <= stall_cycle_in;
     sending_sync        <= sending_sync_in;
+    ll_enable           <= ll_enable_in;
   end
 end 
 
 assign ltssm_state        = state;
 
 
-assign enable_gearbox = (state == P0_TS1) ||
-                        (state == P0_TS2) ||
-                        (state == P0_SDS) ||
-                        (state == P0)     ||
+assign enable_gearbox = (state == P0_TS1)       ||
+                        (state == P0_TS2)       ||
+                        (state == P0_SDS)       ||
+                        (state == P0)           || 
+                        (state == PX_REQ_ST)    ||
+                        (state == PX_START_ST)  ||
+                        (state == ATTR_ST)      ||
                         (state == P0_EXIT);
 
 always @(*) begin
@@ -317,11 +339,10 @@ assign byte_count_end   = (DATA_WIDTH == 8)  ? (byte_count == 'd15) :
 assign block_count_end  = (DATA_WIDTH == 8)  ? block_count == 'd3 :                  
                           (DATA_WIDTH == 16) ? block_count == 'd7 : 'd15;
 
-
 assign tx_startblock    = enable_gearbox && (byte_count == 'd0) && ~stall_cycle;
 assign tx_datavalid     = enable_gearbox && ~stall_cycle;
 
-assign ll_tx_valid      = (tx_datavalid && (state == P0)) || sds_sent; //needs more than this
+assign ll_tx_valid      = (tx_datavalid && (state == P0)) || sds_sent; //needs more than this?
 
 
 
@@ -359,7 +380,9 @@ always @(*) begin
   ltssm_lane_data           = {DATA_WIDTH{1'b0}};
   sync_count_in             = sync_count;
   sending_sync_in           = sending_sync;
-  tx_syncheader             = 2'b10;
+  tx_syncheader             = SH_DATA;
+  ll_enable_in              = 1'b0;
+  attr_sent                 = 1'b0;
   
   case(state)
     //--------------------------------------
@@ -420,14 +443,11 @@ always @(*) begin
               nstate              = P0_TS2;
               phy_rx_align_reg_in = 1'b0;
               count_in            = 'd0;
-              //sync_count_in       = sync_count + 'd1;
             end else begin
               count_in            = count;
-              //sync_count_in       = sync_count + 'd1;
             end
           end else begin
             count_in              = count + 'd1;
-            //sync_count_in         = sync_count + 'd1;
           end
         end else begin
           sending_sync_in         = 1'b0;
@@ -435,7 +455,7 @@ always @(*) begin
         end
       end 
       
-      tx_syncheader               = 2'b01;
+      tx_syncheader               = SH_CTRL;
       if(sending_sync) begin
         if(DATA_WIDTH==8) begin
           ltssm_lane_data = byte_count[0] ? SNYC_B1 : SNYC_B0;
@@ -447,14 +467,14 @@ always @(*) begin
       end else begin
         if(DATA_WIDTH==8) begin
           case(byte_count)
-            0       : ltssm_lane_data = TSX_BYTE0;
+            0       : ltssm_lane_data = TS1_BYTE0;
             default : ltssm_lane_data = TS1_BYTEX;
           endcase
         end
         
         if(DATA_WIDTH==16) begin
           case(byte_count)
-            0       : ltssm_lane_data = {TS1_BYTEX, TSX_BYTE0};
+            0       : ltssm_lane_data = {TS1_BYTEX, TS1_BYTE0};
             default : ltssm_lane_data = {2{TS1_BYTEX}};
           endcase
         end
@@ -464,21 +484,21 @@ always @(*) begin
     
     //--------------------------------------
     P0_TS2 : begin
+      ll_enable_in              = 1'b1;
       if(byte_count_end) begin
-        sending_sync_in           = sync_count == attr_sync_freq;
+        sending_sync_in         = sync_count == attr_sync_freq;
         if(~sending_sync) begin
+          sync_count_in         = sync_count + 'd1;
           if(count >= px_ts2_tx_count || rx_p0_sds_qualifier) begin
             if((rx_ts2_count >= px_ts2_rx_count) || rx_p0_sds_qualifier) begin    //if we have seen N TS2 OR the SDS
-              nstate              = P0_SDS;
-              count_in            = 'd0;
+              nstate            = P0_SDS;
+              count_in          = 'd0;
               //rx_sds_seen_reg_in  = 1'b0; 
             end else begin
-              count_in            = count;
-              sync_count_in       = sync_count + 'd1;
+              count_in          = count;
             end
           end else begin
-            count_in              = count + 'd1;
-            sync_count_in         = sync_count + 'd1;
+            count_in            = count + 'd1;
           end 
         end else begin
           sending_sync_in       = 1'b0;
@@ -487,7 +507,7 @@ always @(*) begin
       end
       
       
-      tx_syncheader               = 2'b01;
+      tx_syncheader               = SH_CTRL;
       if(sending_sync) begin
         if(DATA_WIDTH==8) begin
           ltssm_lane_data = byte_count[0] ? SNYC_B1 : SNYC_B0;
@@ -499,14 +519,14 @@ always @(*) begin
       end else begin
         if(DATA_WIDTH==8) begin
           case(byte_count)
-            0       : ltssm_lane_data = TSX_BYTE0;
+            0       : ltssm_lane_data = TS2_BYTE0;
             default : ltssm_lane_data = TS2_BYTEX;
           endcase
         end
         
         if(DATA_WIDTH==16) begin
           case(byte_count)
-            0       : ltssm_lane_data = {TS2_BYTEX, TSX_BYTE0};
+            0       : ltssm_lane_data = {TS2_BYTEX, TS2_BYTE0};
             default : ltssm_lane_data = {2{TS2_BYTEX}};
           endcase
         end
@@ -520,7 +540,8 @@ always @(*) begin
     
     //--------------------------------------
     P0_SDS : begin
-      tx_syncheader               = 2'b01;
+      ll_enable_in                = 1'b1;
+      tx_syncheader               = SH_CTRL;
       if(DATA_WIDTH==8) begin
         case(byte_count)
           0       : ltssm_lane_data = SDS_BYTE0;
@@ -544,11 +565,157 @@ always @(*) begin
     P0 : begin
       link_wake_n_in            = 1'b1;
       px_exit_state_in          = 2'd0;
+      ll_enable_in              = 1'b1;
       nstate                    = P0;
       
-      if(enter_px_state) begin
-        px_exit_state_in        = link_p3_req ? 'd3 :
-                                  link_p2_req ? 'd2 : 'd1;
+      //Don't start until new startblock
+      if(byte_count_end) begin
+        if(attr_ready && ll_tx_idle) begin
+          nstate                = ATTR_ST;
+        end else if((link_p3_req || link_p2_req || link_p1_req) && ll_tx_idle) begin
+          nstate                = PX_REQ_ST;
+        end
+      end
+    end
+    
+    //--------------------------------------
+    ATTR_ST : begin
+      link_wake_n_in            = 1'b1;
+      ll_enable_in              = 1'b1;
+      
+      tx_syncheader             = SH_CTRL;
+      case(byte_count)
+        'd0 : begin
+          if(DATA_WIDTH==8) begin
+            ltssm_lane_data       = attr_write ? ATTR_WR_B0 : ATTR_RD_B0;
+          end 
+          if(DATA_WIDTH==16) begin
+            ltssm_lane_data[7:0]  = attr_write ? ATTR_WR_B0 : ATTR_RD_B0;
+            ltssm_lane_data[15:8] = attr_addr[7:0];
+          end 
+        end
+        
+        'd1 : begin
+          if(DATA_WIDTH==8) begin
+            ltssm_lane_data       = attr_addr[7:0];
+          end 
+        end
+        
+        'd2 : begin
+          if(DATA_WIDTH==8) begin
+            ltssm_lane_data       = attr_addr[15:8];
+          end 
+          if(DATA_WIDTH==16) begin
+            ltssm_lane_data[7:0]  = attr_addr[15:8];
+            ltssm_lane_data[15:8] = attr_write ? attr_wdata[7:0] : ATTR_FILLER;
+          end 
+        end
+        
+        'd3 : begin
+          if(DATA_WIDTH==8) begin
+            ltssm_lane_data       = attr_write ? attr_wdata[7:0] : ATTR_FILLER;
+          end 
+        end
+        
+        'd4 : begin
+          if(DATA_WIDTH==8) begin
+            ltssm_lane_data       = attr_write ? attr_wdata[15:8] : ATTR_FILLER;
+          end 
+          if(DATA_WIDTH==16) begin
+            ltssm_lane_data[7:0]  = attr_write ? attr_wdata[15:8] : ATTR_FILLER;
+            ltssm_lane_data[15:8] = ATTR_FILLER;
+          end 
+        end
+        
+        
+        default : begin
+          if(DATA_WIDTH==8) begin
+            ltssm_lane_data       = ATTR_FILLER;
+          end
+          if(DATA_WIDTH==16) begin
+            ltssm_lane_data       = {2{ATTR_FILLER}};
+          end
+        end
+      endcase
+      
+      //Should we allow for continued Attributes?
+      if(byte_count_end) begin
+        attr_sent                 = 1'b1;
+        nstate                    = P0;
+      end
+    end
+    
+    //--------------------------------------
+    PX_REQ_ST : begin
+      link_wake_n_in            = 1'b1;
+      ll_enable_in              = 1'b1;
+      tx_syncheader             = SH_CTRL;
+      
+      case(byte_count)
+        'd0 : begin
+          if(DATA_WIDTH==8) begin
+            if(link_p3_req) begin
+              ltssm_lane_data     = P3_REQ_B0;
+            end else if(link_p2_req) begin
+              ltssm_lane_data     = P2_REQ_B0;
+            end else begin
+              ltssm_lane_data     = P1_REQ_B0;
+            end          
+          end 
+          if(DATA_WIDTH==16) begin
+            if(link_p3_req) begin
+              ltssm_lane_data     = {PX_FILLER, P3_REQ_B0};
+            end else if(link_p2_req) begin
+              ltssm_lane_data     = {PX_FILLER, P2_REQ_B0};
+            end else begin
+              ltssm_lane_data     = {PX_FILLER, P1_REQ_B0};
+            end
+          end 
+        end
+        
+        default : begin
+          if(DATA_WIDTH==8) begin
+            ltssm_lane_data       = PX_FILLER;
+          end
+          if(DATA_WIDTH==16) begin
+            ltssm_lane_data       = {2{PX_FILLER}};
+          end
+        end
+      endcase
+            
+      if(byte_count_end && link_px_req_recv) begin
+        px_exit_state_in          = link_p3_req ? 'd3 :
+                                    link_p2_req ? 'd2 : 'd1;
+        nstate                    = PX_START_ST;
+      end
+    end
+    
+    //--------------------------------------
+    PX_START_ST : begin
+      link_wake_n_in            = 1'b1;
+      tx_syncheader             = SH_CTRL;
+      
+      case(byte_count)
+        'd0 : begin
+          if(DATA_WIDTH==8) begin
+            ltssm_lane_data     = P_START_B0;
+          end 
+          if(DATA_WIDTH==16) begin
+            ltssm_lane_data     = {PX_FILLER, P_START_B0};
+          end 
+        end
+        
+        default : begin
+          if(DATA_WIDTH==8) begin
+            ltssm_lane_data     = PX_FILLER;
+          end
+          if(DATA_WIDTH==16) begin
+            ltssm_lane_data     = {2{PX_FILLER}};
+          end
+        end
+      endcase
+            
+      if(byte_count_end && link_px_start_recv) begin
         count_in                = 'd0;
         nstate                  = P0_EXIT;
       end
@@ -597,6 +764,7 @@ always @(*) begin
     //--------------------------------------
     P0_P2_CLK_TRAIL : begin
       use_phy_clk_in            = 1'b0;
+      link_wake_n_in            = 1'b1;
       if(count == px_clk_trail) begin
         phy_clk_idle_in         = 1'b1;
         count_in                = 'd0;
@@ -609,6 +777,7 @@ always @(*) begin
     //--------------------------------------
     P2 : begin
       phy_clk_idle_in           = 1'b1;
+      link_wake_n_in            = 1'b1;
       if(link_active_req) begin
         link_wake_n_in          = 1'b0;
         count_in                = 'd0;
@@ -619,6 +788,7 @@ always @(*) begin
     //--------------------------------------
     P0_P3_CLK_TRAIL : begin
       use_phy_clk_in            = 1'b0;
+      link_wake_n_in            = 1'b1;
       if(count == px_clk_trail) begin
         phy_clk_en_in           = 1'b0;
         count_in                = 'd0;
@@ -630,6 +800,7 @@ always @(*) begin
     
     //--------------------------------------
     P3 : begin
+      link_wake_n_in            = 1'b1;
       if(link_active_req) begin
         link_wake_n_in          = 1'b0;
         phy_clk_en_in           = 1'b1;

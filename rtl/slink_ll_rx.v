@@ -8,9 +8,7 @@ module slink_ll_rx #(
 )(
   input  wire                               clk,
   input  wire                               reset,
-  
-  input  wire                               apb_clk,
-  input  wire                               apb_reset,
+  input  wire                               enable,
   
   //Interface to App
   output reg                                sop,
@@ -30,33 +28,12 @@ module slink_ll_rx #(
   
   //
   input  wire                               sds_received,
-  input  wire                               link_enter_px_state,
   
   output wire                               ecc_corrected,
   output wire                               ecc_corrupted,
   output reg                                crc_corrupted,
-  output wire                               aux_fifo_write_full_err,
   input  wire                               external_link_reset_condition,
   output reg                                link_reset_condition,
-  
-  input  wire                               apb_aux_rinc,
-  output wire [23:0]                        apb_aux_data,
-  output wire                               apb_aux_rempty,
-  output wire                               aux_link_wfull,
-  input  wire [7:0]                         swi_aux_link_short_pkt_min_filter,
-  input  wire [7:0]                         swi_aux_link_short_pkt_max_filter,
-  
-  output wire [15:0]                        attr_addr,
-  output wire [15:0]                        attr_data,
-  output wire                               attr_shadow_update,
-  output wire                               attr_read_req,
-  
-  output wire                               px_req_pkt,
-  output wire [2:0]                         px_req_state,
-  output wire                               px_rej_pkt,
-  output wire                               px_start_pkt,
-
-  
   
   input  wire [(NUM_LANES*DATA_WIDTH)-1:0]  link_data,
   input  wire                               ll_rx_valid,
@@ -166,7 +143,7 @@ always @(posedge clk or posedge reset) begin
 end
 
 
-assign delim_count_in             = ll_rx_valid ? (state == WAIT_SDS) || (delim_count == delimeter) ? 'd0 : delim_count + 'd1 : delim_count;
+assign delim_count_in             = enable ? ll_rx_valid ? ((state == WAIT_SDS) || (delim_count == delimeter) ? 'd0 : delim_count + 'd1) : delim_count : 'd0;
 assign delim_adv                  = delim_count == 'd0;//delim_count_in == delimeter;
 
 assign ll_rx_state                = state;
@@ -1417,6 +1394,8 @@ always @(*) begin
         //so this check will ensure the SOP has been sent properly
         sop_in                  = valid_in && ~sop_sent;
         sop_sent_in             = valid_in ? 1'b1 : sop_sent;
+      end else begin
+        crc_init                = 1'b0;
       end
     end
     
@@ -1523,8 +1502,10 @@ always @(*) begin
         //so this check will ensure the SOP has been sent properly
         sop_in                  = valid_in && ~sop_sent;
         sop_sent_in             = valid_in ? 1'b1 : sop_sent;
+      end else begin
+        crc_init                = 1'b0;
       end
-    end
+    end 
     
     
     default : begin
@@ -1532,8 +1513,8 @@ always @(*) begin
     end
   endcase
   
-  if(/*px_start_pkt ||*/ link_enter_px_state || link_reset_condition || external_link_reset_condition) begin
-    nstate                            = WAIT_SDS;
+  if(link_reset_condition || external_link_reset_condition || ~enable) begin
+    nstate      = WAIT_SDS;
   end
 end
 
@@ -1549,67 +1530,17 @@ wire [15:0] word_count_sel;
 assign data_id_sel      = send_saved ? send_saved_di : data_id_reg_in;
 assign word_count_sel   = send_saved ? send_saved_wc : word_count_reg_in;
 
-
-wire        aux_fifo_winc;
-wire [23:0] aux_fifo_data;
 slink_ll_rx_pkt_filt u_slink_ll_rx_pkt_filt (
-  .clk                  ( clk                               ),
-  .reset                ( reset                             ),
-  .sop                  ( sop_in                            ), 
-  .data_id              ( data_id_sel                       ),  
-  .word_count           ( word_count_sel                    ), 
+  .clk                  ( clk             ),
+  .reset                ( reset           ),
+  .sop                  ( sop_in          ), 
+  .data_id              ( data_id_sel     ),  
+  .word_count           ( word_count_sel  ), 
   
-  .valid                ( valid_in                          ), 
-  .sop_app              ( sop_app                           ), 
-  .valid_app            ( valid_app                         ), 
+  .valid                ( valid_in        ), 
+  .sop_app              ( sop_app         ), 
+  .valid_app            ( valid_app       ));
   
-  .pkt_min_filter       ( swi_aux_link_short_pkt_min_filter ),
-  .pkt_max_filter       ( swi_aux_link_short_pkt_max_filter ),
-  .attr_addr            ( attr_addr                         ),  
-  .attr_data            ( attr_data                         ),  
-  .attr_shadow_update   ( attr_shadow_update                ),  
-  .attr_read_req        ( attr_read_req                     ),  
-  
-  .link_inactive        ( (state == WAIT_SDS)               ),
-  .px_req_pkt           ( px_req_pkt                        ),  
-  .px_req_state         ( px_req_state                      ),  
-  .px_rej_pkt           ( px_rej_pkt                        ),  
-  .px_start_pkt         ( px_start_pkt                      ),  
-  
-  .aux_fifo_winc        ( aux_fifo_winc                     ),
-  .aux_fifo_data        ( aux_fifo_data                     )); 
-  
-assign aux_fifo_write_full_err = aux_fifo_winc && aux_link_wfull;
-  
-// Aux FIFO
-slink_fifo_top #(
-  //parameters
-  .DATA_SIZE          ( 24                  ),
-  .ADDR_SIZE          ( AUX_FIFO_ADDR_WIDTH )
-) u_slink_aux_fifo (
-  .wclk                ( clk                         ),     
-  .wreset              ( reset                       ),     
-  .winc                ( aux_fifo_winc               ),  
-  .rclk                ( apb_clk                     ),     
-  .rreset              ( apb_reset                   ),     
-  .rinc                ( apb_aux_rinc                ),  
-  .wdata               ( aux_fifo_data               ),
-  .rdata               ( apb_aux_data                ),          
-  .wfull               ( aux_link_wfull              ),  
-  .rempty              ( apb_aux_rempty              ),  
-  .rbin_ptr            (                             ),    
-  .rdiff               (                             ),      
-  .wbin_ptr            (                             ),    
-  .wdiff               (                             ),      
-  .swi_almost_empty    ( {AUX_FIFO_ADDR_WIDTH{1'b0}} ),      
-  .swi_almost_full     ( {AUX_FIFO_ADDR_WIDTH{1'b1}} ),      
-  .half_full           (                             ),  
-  .almost_empty        (                             ),  
-  .almost_full         (                             )); 
-
-
-
-
                         
 assign ecc_corrected  = active_lanes == ONE_LANE ? corrected && (state == HEADER_ECC) && (nstate != WAIT_SDS) :
                         active_lanes == TWO_LANE ? corrected && (state == HEADER_WC1) && (nstate != WAIT_SDS) : corrected && (state == IDLE);

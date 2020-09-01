@@ -10,7 +10,6 @@ It includes the following components:
 * Main TX Link State machine for keeping up with conceptual packet and/or link states
 * ECC Syndrome Generator for packet header ECC
 * CRC Generator for Long Packet CRC values
-* AUX Data FIFO for Software based/Response packets
 
 The LL_TX is rather simple, with the only real complexity in the LL_TX being the byte striping and word count calculations. The exact details
 are left for the curious to discover, but essentially the LL_TX will keep up with the ``byte_count`` indicating the `number of bytes sent` for this particular
@@ -61,6 +60,7 @@ ECC
 The S-Link ECC generation and checking implementation is the same as the MIPI CSI (Version 1.3, and probably later).
 
 The inclusion ECC allows the following:
+
 * Finding if the packet header (or entire packet if short) has any errors
 * Checking if a single error has occurred, and if so, allowing a correction
 * Determining if more than a single bit error has occurred and indicating that the packet header/packet is corrupt

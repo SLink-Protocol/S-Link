@@ -11,6 +11,15 @@ An overview of the ltssm states as well as the general flow diagram can be seen 
 ..   :scale:    200%
   
   S-Link LTSSM State Digram  
+  
+128b/130b Encoding
+------------------
+S-Link supports 128/130b encoding if configured. In this mode, the 128b/130b encoders and decoders are internal to S-Link. This 
+should ease requirements on the SerDes front end. This does mean that additional logic is required in S-Link, so please be aware
+of this if you are comparing area numbers to other protocols/IPs.
+
+
+
 
 LTSSM States
 -----------------
@@ -23,7 +32,7 @@ Initial reset state of the link. In this mode, the PHY is completely disabled.
 
 WAIT_CLK
 +++++++++++++++
-Once S-Link is enabled the PHY CLK will be enabled. Depending on the PHY layer used, the PLL (or other clock source)
+Once S-Link is enabled through writing the  the PHY CLK will be enabled. Depending on the PHY layer used, the PLL (or other clock source)
 should be enabled. The LTSSM will wait for ``phy_clk_ready`` to assert. This means that the PHY CLK is active and should
 be actively transmitting from Master -> Slave.
 
@@ -60,7 +69,7 @@ Similar to P0_TS1 state except that we are sending TS2s.
 .. note ::
 
   The number of TSx sets required can be changed based on the P State that is being exited. This is done
-  through the attributes.
+  through the :ref:`S-Link Attributes`.
 
 
 P0_SDS
@@ -73,10 +82,45 @@ P0
 +++++++++++++++
 This is the main data sending state. 
 
-  - Exit to P1 when P1 request condition is seen
-  - Exit to P2 when P2 request condition is seen
-  - Exit to P3 when P3 request condition is seen
+  - Exit to ATTR_ST when there is a far end attribute to update and the LL_TX is idle
+  - Exit to PX_REQ_ST when PX request condition is seen and the LL_TX is idle
   - Exit to RESET when reset condition is seen
+
+ATTR_ST
++++++++++++++++
+When far end :ref:`S-Link Attributes` are to be updated, this state is entered to send an :ref:`Attribute OS`. This state is only entered
+when the link layer is not actively transmitting data. Because of this, there may be a delay between issuing the attribute command and it
+being executed. A user should take this into consideration when programming far end attributes.
+
+Local attribute programming does not force the LTSSM into this state.
+
+  - Exit to P0 after sending the Attribute OS.
+
+.. note ::
+
+  If multiple Attribute OS's are scheduled, the link will still transition back to P0 after each one.
+
+
+PX_REQ_ST
++++++++++++++++
+When the user wishes to enter a lower power state (see :ref:`Power State Handshake`), the LTSSM transitions to PX_REQ_ST to start sending
+the respective :ref:`P-Req` OS's. This continues until the appropriate :ref:`P-Req` response is seen.
+
+   - Exit to PX_START_ST after Px Req OS has been received
+
+PX_START_ST
++++++++++++++++
+After Px Request OS's have been sent and received, the LTSSM will transition to PX_START_ST. Here, the LTSSM will send a :ref:`PStart`
+OS and transition to the P0_EXIT.
+
+  - Exit to P0_EXIT after sending :ref:`PStart` OS
+
+P0_EXIT
++++++++++++++++
+P0_EXIT is a small state in which the lanes remain active to ensure all data has been pushed through the link and/or PHY.
+
+  - Exit to respective P1/P2/P3 state based on earlier request.
+
 
 P1
 +++++++++++++++
@@ -84,7 +128,6 @@ P1 state is a lower power state in which the TX/RX lanes are disabled for power 
 try to enter P1 as much and often as possible to save power. 
 
   - Exit to P0_TS1 when wake condition is seen.
-  - Exit to RESET when reset condition is seen.
 
 P2
 +++++++++++++++
@@ -92,7 +135,6 @@ P2 state is a low power state in which, the TX/RX lanes are disabled and the dat
 in the master (PLL or other logic) should remain active to ensure P2 exit is short.
 
   - Exit to WAIT_CLK when wake condition is seen.
-  - Exit to RESET when reset condition is seen.
 
 P3
 +++++++++++++++
@@ -101,7 +143,6 @@ exception that in P3 the master is allowed to completely disable the clock sourc
 the slave perspective, there is no real difference between P2 and P3, except that it is understood that a longer exit latency is expected when exiting.
 
   - Exit to WAIT_CLK when wake condition is seen.
-  - Exit to RESET when reset condition is seen.
 
 
 RESET
@@ -118,12 +159,44 @@ can be configured by the :ref:`ERROR_CONTROL` software register.
   Inside the S-Link RTL there are additional transition states. These are not listed here for clarity.
 
 
+.. note ::
+
+  Plan to add in a training timeout. Still deciding if we will make the link perform a :ref:`Reset Condition` or if it will just
+  try to go back to P0_TS1. Thinking a :ref:`Reset Condition` since P0_TS1 is pretty much the starting point anyways.
+
+
 Internal Ordered Sets
 ---------------------
+For communicating between both sides of S-Link, internal ordered sets are used. These are *similar* to PCIe/USB (when in 128/13x encoding), although some
+addtional OS's have been implemented and some are not used.
+
+SYNC
+++++
+
+SYNC ordered sets are the same as USB SYNC's and PCIe EIEOS. They are used by the BlockAligner to acquire block alignment with the start of block
+and sync headers. They are only sent during the :ref:`P0_TS1` and :ref:`P0_TS2` LTSSM states. The attribute SYNC_FREQ (:ref:`S-Link Attributes`) is used
+to set the frequency of how often the SYNC OS's are sent. 
+
+.. table::
+  :widths: 10 10 50
+
+  ==========  ======== ================================================
+  Byte        Value    Description                                     
+  ==========  ======== ================================================
+  | 0,2,4,8,  0x00     
+  | 10,12,14  0xFF
+  ==========  ======== ================================================
+
+.. note ::
+
+  SYNC/EIEOS in USB/PCIe are used for signal detection logic. S-Link has no requirements on signal detection since sideband signals
+  are used to indicate start of data. However, a user is free to implement features to detect this for additional enhancements.
+
 
 TS1
 +++
 
+TS1's are the beginning training set that are sent during the :ref:`P0_TS1' LTSSM state.
 
 .. table::
   :widths: 10 10 50
@@ -131,23 +204,29 @@ TS1
   ======= ======== ================================================
   Byte    Value    Description                                     
   ======= ======== ================================================
-  0       0xBC     Used to byte lock RX
-  1-15    0x55     
+  0       0x1E     TS1 OS Identifier
+  1-15    0x55     TS1 Filler
   ======= ======== ================================================
 
 
 TS2
 +++
+TS2's are the second training set that are sent during the :ref:`P0_TS1' LTSSM state.
+
 .. table::
   :widths: 10 10 50
 
   ======= ======== ================================================
   Byte    Value    Description                                     
   ======= ======== ================================================
-  0       0xBC     | Used to byte lock RX if far end is no longer
-                   | sending TS1s
-  1-15    0xAA     
+  0       0x2D     TS2 OS Identifier
+  1-15    0xAA     TS2 Filler
   ======= ======== ================================================
+
+
+.. note ::
+
+  In the future, S-Link may utilize TS1/TS2 bytes 1-15 for link related attributes or settings.
   
 SDS
 +++
@@ -158,16 +237,105 @@ SDS
   ======= ======== ================================================
   Byte    Value    Description                                     
   ======= ======== ================================================
-  0       0xDC     
-  1-15    0xAB     
+  0       0xe1     SDS OS Identifer
+  1-15    0xAB     SDS Filler
   ======= ======== ================================================
 
 
-.. note ::
+P-Req
++++++
 
-  When 128/130b encoding is enabled for S-Link, the above Ordered sets will remain the same.
-  
-  In the future, S-Link may determine to change bytes 1-15 to hold link specific information, similar to PCIe/USB.
+P1 Req
+______
+
+.. table::
+  :widths: 10 10 50
+
+  ======= ======== ================================================
+  Byte    Value    Description                                     
+  ======= ======== ================================================
+  0       0xd1     P1 Req Identifier
+  1-15    0x76     Px Req Filler
+  ======= ======== ================================================
+
+
+P2 Req
+______
+
+.. table::
+  :widths: 10 10 50
+
+  ======= ======== ================================================
+  Byte    Value    Description                                     
+  ======= ======== ================================================
+  0       0xd2     P2 Req Identifier
+  1-15    0x76     Px Req Filler
+  ======= ======== ================================================
+
+P3 Req
+______
+
+.. table::
+  :widths: 10 10 50
+
+  ======= ======== ================================================
+  Byte    Value    Description                                     
+  ======= ======== ================================================
+  0       0xd3     P3 Req Identifier
+  1-15    0x76     Px Req Filler
+  ======= ======== ================================================
+
+PStart
+______
+
+.. table::
+  :widths: 10 10 50
+
+  ======= ======== ================================================
+  Byte    Value    Description                                     
+  ======= ======== ================================================
+  0       0xd8     PStart Identifier
+  1-15    0x76     Px Req Filler
+  ======= ======== ================================================
+
+
+Attribute OS
+++++++++++++
+
+Attribute WRITE
+_______________
+
+.. table::
+  :widths: 10 10 50
+
+  ======= =========== ================================================
+  Byte    Value       Description                                     
+  ======= =========== ================================================
+  0       0xa1        Attribute Write Identifier
+  1       addr[7:0]   Lower byte of attribute address
+  2       addr[15:8]  Upper byte of attribute address
+  3       data[7:0]   Lower byte of attribute write data
+  4       data[15:8]  Upper byte of attribute write data
+  5-15    0x17        Filler
+  ======= =========== ================================================
+
+Attribute READ
+______________
+
+.. table::
+  :widths: 10 10 50
+
+  ======= =========== ================================================
+  Byte    Value       Description                                     
+  ======= =========== ================================================
+  0       0xa0        Attribute Read Identifier
+  1       addr[7:0]   Lower byte of attribute address
+  2       addr[15:8]  Upper byte of attribute address
+  3-15    0x17        Filler
+  ======= =========== ================================================
+
+
+
 
 Power State Handshake
 ---------------------
@@ -176,10 +344,10 @@ or ``p3_req`` signals. For software, the user would write the :ref:`PSTATE_CONTR
 more than one P state is requested (e.g. you have ``p1_req`` and ``p2_req`` asserted) the `lowest` power state is taken (P2 in this example).
 
 When a P State Request is seen, S-Link will continue to send any packet currently in flight, then, provided another packet does not need to start via ``tx_sop`` being asserted,
-S-Link will start to send P state request packets to the far side S-Link. The far-side will see these packets, and once it has finished sending any packets in-flight `and` it
-is not being requested to send another packet via it's ``tx_sop`` being asserted, it will proceed to begin sending P state request packets, mirroring the P State Request.
+S-Link will start to send P state request OS's to the far side S-Link. The far-side will see these packets, and once it has finished sending any packets in-flight `and` it
+is not being requested to send another packet via it's ``tx_sop`` being asserted, it will proceed to begin sending P state request OS's, mirroring the P State Request.
 
-Once the request packets have been seen and sent on both sides of the S-Link, both sides will send a P State Start packet and the LTSSM for each S-Link controller will move
+Once the request packets have been seen and sent on both sides of the S-Link, both sides will send a P State Start OS and the LTSSM for each S-Link controller will move
 to the requested power state.
 
 

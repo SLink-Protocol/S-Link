@@ -35,9 +35,21 @@ slink_force_hard_reset
 - Read those attributes to see if they are back to defaults
 - Wake up link and send some packets
 
+ecc_correction
+++++++++++++++
+Corrupts one of the Packet Header, looks to see if this error
+was seen in the monitor. The receiving side should have receieved the
+packet with no errors since one bit error should be resolvable.
+
+ecc_corruption
+++++++++++++++
+Corrupts two bits of the Packet Header, looks to see if this error
+was seen in the monitor. Allows the link to reset then checks to 
+see if a valid packet can be sent to indicate recovery.
+
 
 
   
-.. generated using get_rst.py by steven at August/13/2020  12:15:12
+.. generated using get_rst.py by steven at September/01/2020  07:47:35
 
 

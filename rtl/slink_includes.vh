@@ -1,10 +1,11 @@
 // Includes to make life easier, I generally don't like include files but sometimes they make sense
 
-localparam    TSX_BYTE0 = 8'hbc;
-localparam    TS1_BYTEX = 8'h55;
-localparam    TS2_BYTEX = 8'haa;
-localparam    SDS_BYTE0 = 8'hdc;
-localparam    SDS_BYTEX = 8'hab;
+localparam    TS1_BYTE0 = 8'h1e,
+              TS1_BYTEX = 8'h55,  
+              TS2_BYTE0 = 8'h2d,  
+              TS2_BYTEX = 8'haa,  
+              SDS_BYTE0 = 8'he1,  
+              SDS_BYTEX = 8'hab;  
 
 
 localparam    SNYC_B0   = 8'h00;
@@ -13,6 +14,20 @@ localparam    SNYC_B1   = 8'hff;
 
 localparam    SH_DATA   = 2'b10;
 localparam    SH_CTRL   = 2'b01;
+
+
+//PState OS
+localparam    P1_REQ_B0   = 8'hd1, 
+              P2_REQ_B0   = 8'hd2,
+              P3_REQ_B0   = 8'hd3,
+              P_START_B0  = 8'hd8,
+              PX_FILLER   = 8'h76;
+
+//Attr OS
+localparam    ATTR_RD_B0  = 8'ha0,
+              ATTR_WR_B0  = 8'ha1,
+              ATTR_RSP_B0 = 8'ha3,
+              ATTR_FILLER = 8'h17;
 
 
 //Short NOP Packet

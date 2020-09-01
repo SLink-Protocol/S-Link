@@ -332,9 +332,9 @@ task monitorInterrupt;
       crc_corrupt_count++;
     end
     
-    if(val[`SLINK_CTRL_INTERRUPT_STATUS__AUX_RX_FIFO_WRITE_FULL]) begin
-      `sim_error($display("Aux RX FIFO Write FULL interrupt seen!"))
-    end
+//     if(val[`SLINK_CTRL_INTERRUPT_STATUS__AUX_RX_FIFO_WRITE_FULL]) begin
+//       `sim_error($display("Aux RX FIFO Write FULL interrupt seen!"))
+//     end
     
   end
 endtask
@@ -345,7 +345,7 @@ endtask
  / __| \ \    / /   | __|  _  _   _ _    __  | |_  (_)  ___   _ _    ___
  \__ \  \ \/\/ /    | _|  | || | | ' \  / _| |  _| | | / _ \ | ' \  (_-<
  |___/   \_/\_/     |_|    \_,_| |_||_| \__|  \__| |_| \___/ |_||_| /__/
-                                                                       
+
 **********************************************************************************/
 
 slink_apb_driver #(.ADDR_WIDTH(9)) apb (
@@ -375,66 +375,29 @@ endtask
 //-----------------------------
 
 
-task write_link_sw_fifo(input bit[7:0]  id, input bit[15:0] data);
+/*
+
+*/
+task write_local_attr(input bit[15:0] attr, input bit[15:0] wdata);
   bit[31:0] val;
   
-  val[`SLINK_CTRL_AUX_LINK_TX_SHORT_PACKET__AUX_LINK_TX_WFULL] = 1;
+  `sim_info($display("Writing Local Attribute: %4h with value %4h", attr, wdata))
   
-  do begin
-    apb.read(`SLINK_CTRL_AUX_LINK_TX_SHORT_PACKET, val);
-  end while(val[`SLINK_CTRL_AUX_LINK_TX_SHORT_PACKET__AUX_LINK_TX_WFULL]);
-  
-  val[`SLINK_CTRL_AUX_LINK_TX_SHORT_PACKET__AUX_LINK_TX_SHORT_PACKET] = {data, id};
-  
-  apb.write(`SLINK_CTRL_AUX_LINK_TX_SHORT_PACKET, val);
-  
-endtask
-
-
-task write_far_end_attr(input bit[15:0] addr, input bit[15:0] data);
-  bit[31:0] val;
-  
-  `sim_info($display("Writing Attribute: %4h with value %4h", addr, data))
-  
-  write_link_sw_fifo(ATTR_ADDR, addr);
-  write_link_sw_fifo(ATTR_DATA, data);
-  
-endtask
-
-
-task read_aux_fifo(output bit[23:0] rdata);
-  bit[31:0] val;
-  
-  val[`SLINK_CTRL_AUX_LINK_RX_SHORT_PACKET_STATUS__AUX_LINK_RX_REMPTY] = 1;
-    
-  do begin
-    apb.read(`SLINK_CTRL_AUX_LINK_RX_SHORT_PACKET_STATUS, val);
-  end while(val[`SLINK_CTRL_AUX_LINK_RX_SHORT_PACKET_STATUS__AUX_LINK_RX_REMPTY]);
-  
-  apb.read(`SLINK_CTRL_AUX_LINK_RX_SHORT_PACKET, val);
-  rdata = val[`SLINK_CTRL_AUX_LINK_RX_SHORT_PACKET__AUX_LINK_RX_SHORT_PACKET];
-  
-  `sim_info($display("Read back Aux FIFO %6h", rdata))
-  
-endtask
-
-task read_far_end_attr(input bit[15:0] addr, output bit[15:0] data);
-  bit[31:0] val;
-  
-  write_link_sw_fifo(ATTR_REQ, addr);
-  read_aux_fifo(val);
-  data = val[23:8];
-
-endtask
-
-task write_local_attr(input bit[15:0] attr, input bit[15:0] data);
-  bit[31:0] val;
-  
-  val[`SLINK_CTRL_SW_ATTR_ADDR_DATA__SW_ATTR_ADDR] = attr;
-  val[`SLINK_CTRL_SW_ATTR_ADDR_DATA__SW_ATTR_DATA] = data;
+  // Set address and data to be written
+  val[`SLINK_CTRL_SW_ATTR_ADDR_DATA__SW_ATTR_ADDR]  = attr;
+  val[`SLINK_CTRL_SW_ATTR_ADDR_DATA__SW_ATTR_WDATA] = wdata;
   
   apb.write(`SLINK_CTRL_SW_ATTR_ADDR_DATA, val);
   
+  // Set the command to WRITE and LOCAL
+  val = 0;
+  val[`SLINK_CTRL_SW_ATTR_CONTROLS__SW_ATTR_LOCAL]  = 1'b1;
+  val[`SLINK_CTRL_SW_ATTR_CONTROLS__SW_ATTR_WRITE]  = 1'b1;
+  
+  apb.write(`SLINK_CTRL_SW_ATTR_CONTROLS, val);
+  
+  
+  // Set shadow update
   val = 0;
   val[`SLINK_CTRL_SW_ATTR_SHADOW_UPDATE__SW_ATTR_SHADOW_UPDATE] = 1'b1;
   
@@ -455,14 +418,53 @@ endtask
 task read_local_attr(input bit[15:0] attr, output bit[15:0] data);
   bit [31:0] val;
   
+  //Set Addr
   val[`SLINK_CTRL_SW_ATTR_ADDR_DATA__SW_ATTR_ADDR] = attr;
   apb.write(`SLINK_CTRL_SW_ATTR_ADDR_DATA, val);
+  
+  // Set the command to ~WRITE and LOCAL
+  val = 0;
+  val[`SLINK_CTRL_SW_ATTR_CONTROLS__SW_ATTR_LOCAL]  = 1'b1;
+  val[`SLINK_CTRL_SW_ATTR_CONTROLS__SW_ATTR_WRITE]  = 1'b0;
+  
+  //Read the response
   apb.read (`SLINK_CTRL_SW_ATTR_DATA_READ, val);
   
-  data = val[`SLINK_CTRL_SW_ATTR_DATA_READ__SW_ATTR_DATA_READ];
+  data = val[`SLINK_CTRL_SW_ATTR_DATA_READ__SW_ATTR_RDATA];
+  
+  `sim_info($display("Reading Local Attribute: %4h with value %4h", attr, data))
   
 endtask
 
+
+
+task write_far_end_attr(input bit[15:0] attr, input bit[15:0] wdata);
+  bit[31:0] val;
+  
+  `sim_info($display("Writing Far-End Attribute: %4h with value %4h", attr, wdata))
+  
+  // Set address and data to be written
+  val[`SLINK_CTRL_SW_ATTR_ADDR_DATA__SW_ATTR_ADDR]  = attr;
+  val[`SLINK_CTRL_SW_ATTR_ADDR_DATA__SW_ATTR_WDATA] = wdata;
+  
+  apb.write(`SLINK_CTRL_SW_ATTR_ADDR_DATA, val);
+  
+  // Set the command to WRITE and LOCAL
+  val = 0;
+  val[`SLINK_CTRL_SW_ATTR_CONTROLS__SW_ATTR_LOCAL]  = 1'b0;
+  val[`SLINK_CTRL_SW_ATTR_CONTROLS__SW_ATTR_WRITE]  = 1'b1;
+  
+  apb.write(`SLINK_CTRL_SW_ATTR_CONTROLS, val);
+  
+  // Set shadow update
+  val = 0;
+  val[`SLINK_CTRL_SW_ATTR_SHADOW_UPDATE__SW_ATTR_SHADOW_UPDATE] = 1'b1;
+  
+  apb.write(`SLINK_CTRL_SW_ATTR_SHADOW_UPDATE, val);
+  
+  #100ns;
+  
+endtask
 
 
 //-----------------------------

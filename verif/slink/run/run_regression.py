@@ -17,9 +17,9 @@ topdir = os.getcwd()
 
 numlanes = [1, 2, 4, 8]               # Max number of lanes
 phywidth = [8, 16]                    # Phy widht to Serdes/IO
-appfact  = [1, 2]                  # App data width multiple factor (based on numlanes * phywidth)
+appfact  = [1, 2]                     # App data width multiple factor (based on numlanes * phywidth)
 
-#numlanes = [4, 8]
+#numlanes = [8]
 #phywidth = [8]
 #appfact  = [1]
 
@@ -54,7 +54,8 @@ tests = {'sanity_test'            : 1,
          'ecc_corruption'         : 1,
          'slink_force_reset'      : 1,
          'slink_force_hard_reset' : 1}
-    
+
+#tests = {'sanity_test'            : 1}
 
 for comp in compile_opts:
   csub = re.sub(r'[^0-9a-zA-Z]+', '_', comp)
@@ -79,3 +80,6 @@ for comp in compile_opts:
 
       os.chdir(topdir)
       
+
+
+

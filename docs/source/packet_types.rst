@@ -1,7 +1,7 @@
 Packets
 ==============
 
-S-Link works almost exclusively on packets. All of the communication between both sides of the link occur through packet based operations.
+S-Link uses packets to communicate between application layers on each side.
 
 There are two type of packets in S-Link, short packets and long packets. These packet types lean heavily on the CSI/DSI packet definitions
 due to their simplicity as well as flexible packet lengths.
@@ -63,20 +63,8 @@ Data ID       Packet Type             App can use?  Payload Data            Desc
 ============= ======================= ============= ======================= =======================================================================
 **Short Packets**
 --------------------------------------------------------------------------------------------------------------------------------------------------- 
-0x01          NOP                     N                                     | No Operation/IDLE packet that is used to keep the link alive but      
-                                                                            | conveys no data                                                       
-0x02          Attribute Addr          Y             Attribute address[15:0]   Updates the far end S-Link attribute address selection                  
-0x03          Attribute Data          Y             Attribute data[15:0]    | Updates the far end S-Link attribute data selection and writes        
-                                                                            | the corresponding attribute address                                   
-0x04          Attribute Request       Y             Attribute address[15:0] | Request for the far end S-Link to respond with the attribute shadow   
-                                                                            | value at the provided address                                         
-0x05          Attribute Response      Y             Attribute data[15:0]      Returned data value for the previous attribute request                      
-0x06          P State Request         Y?            | [0] - P1                Request for a P state change.                                           
-                                                    | [1] - P2                                                                                        
-                                                    | [2] - P3                                                                                        
-0x07          RESERVED                                                      Reserved for future use                                                 
-0x08          P State Start           N                                     Indicates for the S-Link to enter the requested P state                 
-0x09-0x0f     RESERVED                                                      Reserved for future use                                                 
+0x00/0x01     NOP                     N                                     | No Operation/IDLE packet that is used to keep the link alive but      
+                                                                            | conveys no data                                                                                                    
 
 **Long Packets**
 --------------------------------------------------------------------------------------------------------------------------------------------------- 

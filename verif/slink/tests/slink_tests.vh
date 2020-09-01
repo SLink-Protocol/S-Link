@@ -108,12 +108,23 @@ task sanity_test;
   driver_m2s.sendLongPacket('h22, 3);
   #10ns;
   driver_m2s.sendLongPacket('h22, 4);
+  #10ns;
   driver_m2s.sendLongPacket('h22, 5);
   
   #10ns;
   driver_m2s.sendLongPacket('h22, 16);
   driver_m2s.sendLongPacket('h22, 17);
   driver_m2s.sendLongPacket('h22, 18);
+  
+  driver_m2s.write_local_attr  (ATTR_P1_TS1_TX, 4);
+  driver_m2s.write_local_attr  (ATTR_P1_TS1_TX, 4);
+  driver_m2s.write_local_attr  (ATTR_P1_TS2_TX, 4);
+  driver_m2s.write_local_attr  (ATTR_P1_TS2_TX, 4);
+  
+  driver_m2s.write_far_end_attr(ATTR_P1_TS1_TX, 4);
+  driver_m2s.write_far_end_attr(ATTR_P1_TS1_TX, 4);
+  driver_m2s.write_far_end_attr(ATTR_P1_TS2_TX, 4);
+  driver_m2s.write_far_end_attr(ATTR_P1_TS2_TX, 4);
   
   #10ns;
   for(int i = 1; i < 53; i++) begin
@@ -385,6 +396,7 @@ task slink_force_hard_reset;
   
   //go low power state to take new settings
   driver_m2s.enterP1;
+  #1us;
   driver_m2s.wakeup_link;
   
   fork

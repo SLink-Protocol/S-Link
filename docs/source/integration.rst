@@ -16,7 +16,9 @@ RX_APP_DATA_WIDTH              | N * NUM_RX * PHY_DATA_WIDTH  | Data width of th
                                                               | be a multiple of the PHY_DATA_WIDTH * maximum number 
                                                               | of lanes. N is required to be a factor of 2.
 DESKEW_FIFO_DEPTH              4                              Number of deskew FIFO entries for RX. 
-LTSSM_REGISTER_TXDATA          0/1                            Adds optional pipeline state in LTSSM. Useful for FPGA
+LTSSM_REGISTER_TXDATA          0/1                            | Adds optional pipeline state in LTSSM. Useful for FPGA,
+                                                              | slower proceses, or higher clock frequencies.
+INCLUDE_BIST                   0/1                            1 - Includes the BIST logic. 0 - BIST logic removed
 ============================== ============================== ============================================================
 
 
@@ -25,7 +27,7 @@ for 4+ lanes in the TX path is excluded from the design.
 
 .. note ::
 
-  * Support for 8/16/32/64/128 Lanes is coming soon
+  * Support for 16/32/64/128 Lanes is coming soon
   * Support for 32bit phy data widths is coming soon
   * Currently DESKEW_FIFO_DEPTH should be kept at 4. Future support for upto 16 entries is coming.
 
@@ -63,11 +65,6 @@ Ports
                                                                      | during low power states or when the phy clock is not available)
     link_reset                 output       1                        Link reset synchronized to the link_clk
     
-    app_attr_addr              input        [15:0]                   Attribute address for changing local attributes
-    app_attr_data              input        [15:0]                   Attribute data
-    app_shadow_update          input        1                        Attribute shadow update
-    app_attr_data_read         output       [15:0]                   Read data for the attribute selected by app_attr_addr
-    
     tx_sop                     input        1                        Application TX Start of Packet
     tx_data_id                 input        [7:0]                    Application TX Data ID
     tx_word_count              input        [15:0]                   Application TX Word Count/Short Packet Payload
@@ -85,6 +82,8 @@ Ports
     p1_req                     input        1                        Request S-Link to enter P1 state
     p2_req                     input        1                        Request S-Link to enter P2 state
     p3_req                     input        1                        Request S-Link to enter P3 state
+    in_px_state                output       1                        Indicates the link is in P1/2/3 state
+    in_reset_state             output       1                        Indicates the link is in the RESET state
     interrupt                  output       1                        Interrupt status
     
     **Phy Signals**
@@ -95,6 +94,7 @@ Ports
     slink_gpio_wake_n_oen      output       1                        | Output enable for S-Link wake sideband. 1 - sideband wake should be driven low. 0 - sideband wake 
                                                                      | should be not driven            
     slink_gpio_wake_n          input        1                        S-Link wake sideband value (if this side is not driving, should be value from other side)
+    
     refclk                     input        1                        Low Speed always free running refclk
     phy_clk                    input        1                        High speed PHY clock synchronous with the TX/RX data
     phy_clk_en                 output       1                        Enable the PHY CLK logic
@@ -107,11 +107,12 @@ Ports
     phy_tx_data                output       | [(NUM_TX_LANES*        TX data
                                             | PHY_DATA_WIDTH)-1:0] 
     phy_rx_en                  output       [NUM_RX_LANES-1:0]       Enable RX for data reception
+    phy_rx_clk                 input        [NUM_RX_LANES-1:0]       RX clock for each lane. If each RX clock is synchronous to phy_clk, tie phy_clk to these
     phy_rx_ready               input        [NUM_RX_LANES-1:0]       RX is enabled and ready for data reception
     phy_rx_valid               input        [NUM_RX_LANES-1:0]       RX is receiving data and has acquired byte lock 
     phy_rx_dordy               input        [NUM_RX_LANES-1:0]       | RX data is valid this cycle
                                                                      | **CURRENTLY UNUSED**
-    phy_rx_align               output       [NUM_RX_LANES-1:0]       Indicates RX should look for byte lock
+    phy_rx_align               output       [NUM_RX_LANES-1:0]       Indicates RX is looking for block alignment. Could be used by the RX to enable CDR or other logic.
     phy_rx_data                input        | [(NUM_RX_LANES*        RX data
                                             | PHY_DATA_WIDTH)-1:0] 
     ========================== ===========  =======================  ==============================================================================================================
@@ -147,7 +148,8 @@ In the example above, if we assume a one lane S-Link at 8bits we can see how eac
 
 .. warning ::
   
-  The application layer **must** always present valid data after the ``tx_sop`` assertion until all bytes are sent based on the word count value.
+  The application layer **must** always present valid data after the ``tx_sop`` assertion until all bytes are sent based on the word count value. e.g. If word_count equals 12, all 12 bytes need
+  to be available to S-Link. If the APP_DATA_WIDTH is 32bits, S-Link would set ``tx_advance`` 3 times (3 cycles x 4 bytes / cycle = 12 bytes total).
   
 
 

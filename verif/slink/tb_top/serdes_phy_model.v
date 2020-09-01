@@ -301,8 +301,8 @@ reg  [$clog2(MAX_DELAY_CYC)-1:0] delay_amount [NUM_RX_LANES];
 initial begin
   foreach(delay_amount[i]) begin
     delay_amount[i] = $urandom;
-    //delay_amount[i] = 0;
-    $display("mst %0d -- %0d", i, delay_amount[i]);
+    //delay_amount[i] = 15;
+    $display("SerDes RX Dly %0d -- %0d", i, delay_amount[i]);
   end
 end
 

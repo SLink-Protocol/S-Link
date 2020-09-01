@@ -31,8 +31,15 @@ S-Link supports the following features:
 * Configurable Attributes for fine tuning link controls and/or active link managemnet
 * Low Power (P states) for power savings
 * ECC/CRC for error checking
-* Parameterizable FIFO sizes for Deskew and AUX channels
-* Parameterizable pipeline stages to optimze for frequency and/or power
+* Parameterizable pipeline stages to optimze for frequency and/or power or based on physical layers
+
+.. note ::
+  
+  128b/130b encoding is the *default* setting for S-Link and is generally meant to be used with typical SerDes where CDRs are used
+  and/or bit alignment requires digital support. Support for a strobe-like interface (parallel, either low or high speed) is being
+  added. The document may mention statements like "if 128b/130b is enabled...", the doc is being written with the strobe-like interface
+  in mind to cut down on constantly changing the docs. So if you see this and 128/130b is the only mode, just be aware that this is why
+  and give me some time to add it.
 
 
 Multi-Lane Support
@@ -81,7 +88,3 @@ S-Link provides four conceptual power states for operation:
 Power states can be entered and exited through hardware or software based operations.
 
 
-Aux Channel
-+++++++++++
-The AUX channel is a software oriented datapath that allows software to send/receive short packets to/from the far side S-Link. This channel is ideally
-to be used for attribute updates and possibly testing.

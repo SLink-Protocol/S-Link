@@ -277,10 +277,10 @@ slink #(
   .link_clk                    ( mst_link_clk                 ),  
   .link_reset                  ( mst_link_reset               ),  
   
-  .app_attr_addr               ( 16'd0 ),
-  .app_attr_data               ( 16'd0 ),
-  .app_shadow_update           ( 1'b0  ),
-  .app_attr_data_read          (       ),
+//   .app_attr_addr               ( 16'd0 ),
+//   .app_attr_data               ( 16'd0 ),
+//   .app_shadow_update           ( 1'b0  ),
+//   .app_attr_data_read          (       ),
                
   .tx_sop                      ( mst_tx_sop                   ),  
   .tx_data_id                  ( mst_tx_data_id               ),  
@@ -349,10 +349,10 @@ slink #(
   .link_clk                    ( slv_link_clk                 ),  
   .link_reset                  ( slv_link_reset               ),  
   
-  .app_attr_addr               ( 16'd0 ),
-  .app_attr_data               ( 16'd0 ),
-  .app_shadow_update           ( 1'b0  ),
-  .app_attr_data_read          (       ),        
+//   .app_attr_addr               ( 16'd0 ),
+//   .app_attr_data               ( 16'd0 ),
+//   .app_shadow_update           ( 1'b0  ),
+//   .app_attr_data_read          (       ),        
   
   .tx_sop                      ( slv_tx_sop                   ),  
   .tx_data_id                  ( slv_tx_data_id               ),  
@@ -430,6 +430,14 @@ initial begin
 //     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[0][1]);
 //     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[0][2]);
 //     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[0][3]);
+//     
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[1][0]);
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[1][1]);
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[1][2]);
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.data_fifo[1][3]);
+// 
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.fifo_ptr_in[0]);
+//     $dumpvars(0, u_slink_SLAVE.u_slink_rx_align_deskew.u_slink_rx_deskew.fifo_ptr_in[1]);
 //     
 //     $dumpvars(0, u_slink_MASTER.u_slink_rx_align_deskew.u_slink_rx_deskew.sds_byte_count[0]);
 //     $dumpvars(0, u_slink_MASTER.u_slink_rx_align_deskew.u_slink_rx_deskew.sds_byte_count[1]);

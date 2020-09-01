@@ -12,6 +12,7 @@ module slink_rx_deskew #(
   input  wire [NUM_LANES-1:0]                 rx_data_valid_in,
   input  wire [(NUM_LANES*2)-1:0]             rx_syncheader_in,
   input  wire [NUM_LANES-1:0]                 rx_startblock_in,
+  input  wire [NUM_LANES-1:0]                 rx_locked,
   
   input  wire [2:0]                           active_lanes,
   output wire [(NUM_LANES*FIFO_CLOG2)-1:0]    fifo_ptr_status,
@@ -22,6 +23,17 @@ module slink_rx_deskew #(
   output wire [NUM_LANES-1:0]                 rx_data_valid_out,
   output wire [(NUM_LANES*2)-1:0]             rx_syncheader_out,
   output wire [NUM_LANES-1:0]                 rx_starblock_out,
+  
+  output wire                                 ll_rx_datavalid,
+  
+  output reg                                  rx_px_req,
+  output reg  [2:0]                           rx_px_req_state,
+  output reg                                  rx_px_start,      
+  
+  output reg  [15:0]                          attr_addr,                         
+  output reg  [15:0]                          attr_data,
+  output reg                                  attr_update,
+  output reg                                  attr_rd_req,
   
   output wire [1:0]                           deskew_state
 );
@@ -72,12 +84,12 @@ generate
           fifo_ptr[laneindex]                   <= 'd0;
         end else begin
           if(fifoindex == 0) begin
-            data_fifo[laneindex][fifoindex]     <= lane_active[laneindex] && enable ? {rx_data_valid_in[laneindex], 
-                                                                                       rx_startblock_in[laneindex],
-                                                                                       rx_syncheader_in[((laneindex+1)*2)-1:(laneindex*2)],
-                                                                                       rx_data_in[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)]} : 'd0;
+            data_fifo[laneindex][fifoindex]     <= lane_active[laneindex] && enable && rx_locked[laneindex] ? {rx_data_valid_in[laneindex], 
+                                                                                                               rx_startblock_in[laneindex],
+                                                                                                               rx_syncheader_in[((laneindex+1)*2)-1:(laneindex*2)],
+                                                                                                               rx_data_in[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)]} : 'd0;
           end else begin
-            data_fifo[laneindex][fifoindex]     <= lane_active[laneindex] && enable ? data_fifo[laneindex][fifoindex-1] : 'd0;
+            data_fifo[laneindex][fifoindex]     <= lane_active[laneindex] && enable && rx_locked[laneindex] ? data_fifo[laneindex][fifoindex-1] : 'd0;
           end
           
           fifo_ptr[laneindex]                   <=  (state == IDLE)   ? {FIFO_CLOG2+1{1'b0}} : 
@@ -182,6 +194,11 @@ generate
     reg ctrl_sb_sym;
     
     always @(*) begin
+      ctrl_sb_sym                     = 1'b0;
+      ts1_byte_count_in[laneindex]    = ts1_byte_count[laneindex];
+      ts2_byte_count_in[laneindex]    = ts2_byte_count[laneindex];
+      sds_byte_count_in[laneindex]    = sds_byte_count[laneindex];
+      
       if(state == LOCKED) begin
         
         //Indicates the start of a control block
@@ -190,9 +207,9 @@ generate
         case(ts1_byte_count[laneindex])
           4'd0 : begin
             if(ctrl_sb_sym) begin
-              ts1_byte_count_in[laneindex] = (DATA_WIDTH == 8)  ? (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == TSX_BYTE0                    ? 'd1 : 'd0) :
-                                             (DATA_WIDTH == 16) ? (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == {TS1_BYTEX, TSX_BYTE0}       ? 'd2 : 'd0) : 
-                                                                  (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == {{3{TS1_BYTEX}}, TSX_BYTE0}  ? 'd4 : 'd0);
+              ts1_byte_count_in[laneindex] = (DATA_WIDTH == 8)  ? (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == TS1_BYTE0                    ? 'd1 : 'd0) :
+                                             (DATA_WIDTH == 16) ? (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == {TS1_BYTEX, TS1_BYTE0}       ? 'd2 : 'd0) : 
+                                                                  (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == {{3{TS1_BYTEX}}, TS1_BYTE0}  ? 'd4 : 'd0);
             end
           end
 
@@ -206,9 +223,9 @@ generate
         case(ts2_byte_count[laneindex])
           4'd0 : begin
             if(ctrl_sb_sym) begin
-              ts2_byte_count_in[laneindex] = (DATA_WIDTH == 8)  ? (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == TSX_BYTE0                    ? 'd1 : 'd0) :
-                                             (DATA_WIDTH == 16) ? (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == {TS2_BYTEX, TSX_BYTE0}       ? 'd2 : 'd0) : 
-                                                                  (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == {{3{TS2_BYTEX}}, TSX_BYTE0}  ? 'd4 : 'd0);
+              ts2_byte_count_in[laneindex] = (DATA_WIDTH == 8)  ? (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == TS2_BYTE0                    ? 'd1 : 'd0) :
+                                             (DATA_WIDTH == 16) ? (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == {TS2_BYTEX, TS2_BYTE0}       ? 'd2 : 'd0) : 
+                                                                  (rx_data_out[((laneindex+1)*DATA_WIDTH)-1:(laneindex*DATA_WIDTH)] == {{3{TS2_BYTEX}}, TS2_BYTE0}  ? 'd4 : 'd0);
             end
           end
 
@@ -256,6 +273,162 @@ generate
 endgenerate
 
 
+//Other Control OS Detection
+reg [3:0]   ctrl_byte_count, ctrl_byte_count_in;
+reg         ctrl_byte_active, ctrl_byte_active_in;
+wire        ctrl_byte_start;
+wire        data_byte_start;
 
+reg         rx_px_req_in;
+reg [2:0]   rx_px_req_state_in;
+reg         rx_px_start_in;
+reg         cur_attr_wr_req, cur_attr_wr_req_in;
+reg         cur_attr_rd_req, cur_attr_rd_req_in;
+reg         cur_attr_rsp_req, cur_attr_rsp_req_in;
+
+reg  [15:0] attr_addr_in;
+reg  [15:0] attr_data_in;
+reg         attr_update_in;
+
+always @(posedge clk or posedge reset) begin
+  if(reset) begin
+    ctrl_byte_count   <= 'd0;
+    ctrl_byte_active  <= 1'b0;
+    rx_px_req         <= 1'b0;
+    rx_px_req_state   <= 'd0;
+    rx_px_start       <= 1'b0;
+    cur_attr_wr_req   <= 1'b0;
+    cur_attr_rd_req   <= 1'b0;
+    cur_attr_rsp_req  <= 1'b0;
+    attr_addr         <= 16'd0;
+    attr_data         <= 16'd0;
+    attr_update       <= 1'b0;
+  end else begin
+    ctrl_byte_count   <= ctrl_byte_count_in;
+    ctrl_byte_active  <= ctrl_byte_active_in;
+    rx_px_req         <= rx_px_req_in;
+    rx_px_req_state   <= rx_px_req_state_in;
+    rx_px_start       <= rx_px_start_in;
+    cur_attr_wr_req   <= cur_attr_wr_req_in;
+    cur_attr_rd_req   <= cur_attr_rd_req_in;
+    cur_attr_rsp_req  <= cur_attr_rsp_req_in;
+    attr_addr         <= attr_addr_in;
+    attr_data         <= attr_data_in;
+    attr_update       <= attr_update_in;
+  end
+end
+
+assign ctrl_byte_start = rx_starblock_out[0] && rx_data_valid_out[0] && (rx_syncheader_out[1:0] == SH_CTRL);
+assign data_byte_start = rx_starblock_out[0] && rx_data_valid_out[0] && (rx_syncheader_out[1:0] == SH_DATA);
+
+
+// For control OS's we will only look on Lane0. This will save some logic
+// and no need to deal with checking each lane.
+always @(*) begin
+  rx_px_req_in        = rx_px_req;
+  rx_px_req_state_in  = rx_px_req_state;
+  rx_px_start_in      = rx_px_start;
+  ctrl_byte_active_in = ctrl_byte_active;
+  ctrl_byte_count_in  = ctrl_byte_count;
+  
+  cur_attr_wr_req_in  = cur_attr_wr_req;
+  cur_attr_rd_req_in  = cur_attr_rd_req;
+  cur_attr_rsp_req_in = cur_attr_rsp_req;
+  
+  attr_addr_in        = attr_addr;
+  attr_data_in        = attr_data;
+  
+  attr_update_in      = 1'b0;
+  
+  if(enable && (state == LOCKED)) begin
+    ctrl_byte_active_in   = ctrl_byte_start ? 1'b1 : data_byte_start ? 1'b0 : ctrl_byte_active;
+    
+    case(ctrl_byte_count)
+      //--------------------
+      'd0 : begin
+        if(ctrl_byte_start) begin
+          ctrl_byte_count_in    = DATA_WIDTH/8;
+          rx_px_req_in          =  (rx_data_out[7:0] == P3_REQ_B0) ||
+                                   (rx_data_out[7:0] == P2_REQ_B0) ||
+                                   (rx_data_out[7:0] == P1_REQ_B0);
+          rx_px_req_state_in    = {(rx_data_out[7:0] == P3_REQ_B0),
+                                   (rx_data_out[7:0] == P2_REQ_B0),
+                                   (rx_data_out[7:0] == P1_REQ_B0)};
+          rx_px_start_in        =  (rx_data_out[7:0] == P_START_B0);
+                    
+          cur_attr_rd_req_in    = (rx_data_out[7:0] == ATTR_RD_B0);
+          cur_attr_wr_req_in    = (rx_data_out[7:0] == ATTR_WR_B0);
+          
+          
+          if(DATA_WIDTH==16) begin
+            //Attribute
+            if(cur_attr_rd_req_in || cur_attr_wr_req_in) begin
+              attr_addr_in[7:0] = rx_data_out[15:8];
+            end
+          end
+        end
+      end
+      
+      //--------------------
+      'd1 : begin
+        ctrl_byte_count_in      = ctrl_byte_count + 'd1;
+        attr_addr_in[7:0]       = rx_data_out[7:0];
+      end
+      
+      //--------------------
+      'd2 : begin
+        ctrl_byte_count_in      = ctrl_byte_count + (DATA_WIDTH/8);
+        if(DATA_WIDTH==8) begin
+          attr_addr_in[15:8]    = rx_data_out[7:0];
+        end
+        if(DATA_WIDTH==16) begin
+          attr_addr_in[15:8]    = rx_data_out[7:0];
+          attr_data_in[ 7:0]    = rx_data_out[15:8];
+        end
+      end
+      
+      //--------------------
+      'd3 : begin
+        ctrl_byte_count_in      = ctrl_byte_count + 'd1;
+        attr_data_in[ 7:0]      = rx_data_out[7:0];
+      end
+      
+      //--------------------
+      'd4 : begin
+        ctrl_byte_count_in      = ctrl_byte_count + (DATA_WIDTH/8);
+        if(DATA_WIDTH==8) begin
+          attr_data_in[15:8]    = rx_data_out[7:0];
+        end
+        if(DATA_WIDTH==16) begin
+          attr_data_in[15:8]    = rx_data_out[7:0];
+        end
+        attr_update_in          = cur_attr_wr_req;
+      end
+      
+      default : begin
+        ctrl_byte_count_in = ctrl_byte_count + (DATA_WIDTH/8);
+        if(ctrl_byte_count_in == 'd0) begin
+          cur_attr_wr_req_in  = 1'b0;
+          cur_attr_rd_req_in  = 1'b0;
+          cur_attr_rsp_req_in = 1'b0;
+        end
+      end
+    endcase
+  end else begin
+    ctrl_byte_count_in    = 'd0;
+    ctrl_byte_active_in   = 'd0;
+    rx_px_req_in          = 'd0;
+    rx_px_req_state_in    = 'd0;
+    rx_px_start_in        = 'd0;   
+    
+    cur_attr_wr_req_in    = 1'b0;
+    cur_attr_rd_req_in    = 1'b0;
+    cur_attr_rsp_req_in   = 1'b0; 
+  end
+end
+
+
+//assign ll_rx_datavalid = ~ctrl_byte_active_in && (&rx_data_valid_out);
+assign ll_rx_datavalid = ~ctrl_byte_active_in && (&(rx_data_valid_out | ~lane_active));
 
 endmodule

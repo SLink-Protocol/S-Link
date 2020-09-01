@@ -15,6 +15,8 @@
 
 
 - [ ] Add a startblock/datavalid check to the output of the deskew to catch if something goes haywire
+- [ ] I believe in the deskew we can change the ts* byte counts to just have one instead of one per lane. And just check them
+      all at the same time. This would reduce size.
 
 ### Verification
 

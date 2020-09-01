@@ -44,17 +44,16 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ====================== ======== ======== ========== =====================================================================================================================
-  Name                   Index    Type     Reset      Description                                                                                                          
-  ====================== ======== ======== ========== =====================================================================================================================
-  ECC_CORRUPTED          [0]      W1C      0x0        Indicates that a packet header was received with the ECC corrupted.                                                  
-  ECC_CORRECTED          [1]      W1C      0x0        Indicates that a packet header was received with the ECC corrected.                                                  
-  CRC_CORRUPTED          [2]      W1C      0x0        Indicates that a long packet was received and the received CRC did not match the calculated CRC based on the payload.
-  AUX_RX_FIFO_WRITE_FULL [3]      W1C      0x0        Indicates that a packet was attempted to be written in the AUX RX FIFO but the FIFO was full on the write attempt.   
-  RESET_SEEN             [4]      W1C      0x0        Indicates a reset condition was seen                                                                                 
-  WAKE_SEEN              [5]      W1C      0x0        Indicates a wake condition was seen                                                                                  
-  IN_PSTATE              [6]      W1C      0x0        Indicates the link has entered into a P state (only asserts on entry)                                                
-  ====================== ======== ======== ========== =====================================================================================================================
+  ============= ======== ======== ========== =====================================================================================================================
+  Name          Index    Type     Reset      Description                                                                                                          
+  ============= ======== ======== ========== =====================================================================================================================
+  ECC_CORRUPTED [0]      W1C      0x0        Indicates that a packet header was received with the ECC corrupted.                                                  
+  ECC_CORRECTED [1]      W1C      0x0        Indicates that a packet header was received with the ECC corrected.                                                  
+  CRC_CORRUPTED [2]      W1C      0x0        Indicates that a long packet was received and the received CRC did not match the calculated CRC based on the payload.
+  RESET_SEEN    [3]      W1C      0x0        Indicates a reset condition was seen                                                                                 
+  WAKE_SEEN     [4]      W1C      0x0        Indicates a wake condition was seen                                                                                  
+  IN_PSTATE     [5]      W1C      0x0        Indicates the link has entered into a P state (only asserts on entry)                                                
+  ============= ======== ======== ========== =====================================================================================================================
 
 
 INTERRUPT_ENABLE
@@ -67,17 +66,16 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ============================= ======== ======== ========== ============================================
-  Name                          Index    Type     Reset      Description                                 
-  ============================= ======== ======== ========== ============================================
-  ECC_CORRUPTED_INT_EN          [0]      RW       0x1        Enables the ecc_corrupted interrupt         
-  ECC_CORRECTED_INT_EN          [1]      RW       0x1        Enables the ecc_corrected interrupt         
-  CRC_CORRUPTED_INT_EN          [2]      RW       0x1        Enables the crc_corrupted interrupt         
-  AUX_RX_FIFO_WRITE_FULL_INT_EN [3]      RW       0x1        Enables the aux_rx_fifo_write_full interrupt
-  RESET_SEEN_INT_EN             [4]      RW       0x1        Enables the reset_seen interrupt            
-  WAKE_SEEN_INT_EN              [5]      RW       0x0        Enables the wake_seen interrupt             
-  IN_PSTATE_INT_EN              [6]      RW       0x0        Enables the in_pstate interrupt             
-  ============================= ======== ======== ========== ============================================
+  ==================== ======== ======== ========== ===================================
+  Name                 Index    Type     Reset      Description                        
+  ==================== ======== ======== ========== ===================================
+  ECC_CORRUPTED_INT_EN [0]      RW       0x1        Enables the ecc_corrupted interrupt
+  ECC_CORRECTED_INT_EN [1]      RW       0x1        Enables the ecc_corrected interrupt
+  CRC_CORRUPTED_INT_EN [2]      RW       0x1        Enables the crc_corrupted interrupt
+  RESET_SEEN_INT_EN    [3]      RW       0x1        Enables the reset_seen interrupt   
+  WAKE_SEEN_INT_EN     [4]      RW       0x0        Enables the wake_seen interrupt    
+  IN_PSTATE_INT_EN     [5]      RW       0x0        Enables the in_pstate interrupt    
+  ==================== ======== ======== ========== ===================================
 
 
 PSTATE_CONTROL
@@ -139,8 +137,8 @@ Description:
   ============= ======== ======== ========== =======================================
 
 
-AUX_LINK_CONTROL_STATUS
------------------------
+SW_ATTR_ADDR_DATA
+-----------------
 
 Address: 0x1c
 
@@ -149,17 +147,16 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ============================= ======== ======== ========== ===========================================================================================================================================================
-  Name                          Index    Type     Reset      Description                                                                                                                                                
-  ============================= ======== ======== ========== ===========================================================================================================================================================
-  AUX_LINK_SHORT_PKT_MIN_FILTER [7:0]    RW       0x4        Used in conjuntion with aux_link_short_pkt_max_filter to *filter* certain short packets for receiption to the RX FIFOs.                                    
-  AUX_LINK_SHORT_PKT_MAX_FILTER [15:8]   RW       0x4                                                                                                                                                                   
-  AUX_LINK_FIFOS_ACTIVE         [16]     RO       0x0        1 - Software based S-Link AUX FIFOs are active. 0 - Software based S-Link FIFOs are inactive and thus software cannot be used to send/receive short packets
-  ============================= ======== ======== ========== ===========================================================================================================================================================
+  ============= ======== ======== ========== ============================================
+  Name          Index    Type     Reset      Description                                 
+  ============= ======== ======== ========== ============================================
+  SW_ATTR_ADDR  [15:0]   RW       0x0        Address for software based attribute updates
+  SW_ATTR_WDATA [31:16]  RW       0x0        Data for software based attribute updates   
+  ============= ======== ======== ========== ============================================
 
 
-AUX_LINK_TX_SHORT_PACKET
-------------------------
+SW_ATTR_CONTROLS
+----------------
 
 Address: 0x20
 
@@ -168,18 +165,16 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ======================== ======== ======== ========== =========================================================================================================================
-  Name                     Index    Type     Reset      Description                                                                                                              
-  ======================== ======== ======== ========== =========================================================================================================================
-  AUX_LINK_TX_SHORT_PACKET [23:0]   WFIFO    0x0        Short packet to send via software FIFO. If aux_link_tx_wfull is asserted when this is written, the write will be ignored.
-  RESERVED0                [29:24]  RO       0x0                                                                                                                                 
-  AUX_LINK_TX_WFULL        [30]     RO       0x0        Indicates S-Link AUX TX FIFO is full and should not be written to.                                                       
-  AUX_LINK_TX_REMPTY       [31]     RO       0x0        Indicates S-Link AUX TX FIFO is empty. Informative only.                                                                 
-  ======================== ======== ======== ========== =========================================================================================================================
+  ============= ======== ======== ========== ==============================================================
+  Name          Index    Type     Reset      Description                                                   
+  ============= ======== ======== ========== ==============================================================
+  SW_ATTR_WRITE [0]      RW       0x1        0 - Perform a read command. 1 - Perform a write command       
+  SW_ATTR_LOCAL [1]      RW       0x1        0 - Write/Read to far end SLink. 1 - Write/Read to local SLink
+  ============= ======== ======== ========== ==============================================================
 
 
-AUX_LINK_RX_SHORT_PACKET
-------------------------
+SW_ATTR_DATA_READ
+-----------------
 
 Address: 0x24
 
@@ -188,15 +183,15 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ======================== ======== ======== ========== ===========================================================================================================================================================================================
-  Name                     Index    Type     Reset      Description                                                                                                                                                                                
-  ======================== ======== ======== ========== ===========================================================================================================================================================================================
-  AUX_LINK_RX_SHORT_PACKET [23:0]   RFIFO    0x0        Short packet(s) received via S-Link RX based on aux_LINK filters. Reading this register causes the FIFO to "pop". If aux_link_rx_empty is asserted, nothing happens to the FIFO            
-  ======================== ======== ======== ========== ===========================================================================================================================================================================================
+  ============= ======== ======== ========== ==========================================================================================================================================================================================
+  Name          Index    Type     Reset      Description                                                                                                                                                                               
+  ============= ======== ======== ========== ==========================================================================================================================================================================================
+  SW_ATTR_RDATA [15:0]   RFIFO    0x0        Shadow attribute data based on the sw_attr_addr value. *The sw_attr_data_read is actually only the link_clk, so it is advised to set the sw_attr_addr for several cycles prior to reading*
+  ============= ======== ======== ========== ==========================================================================================================================================================================================
 
 
-AUX_LINK_RX_SHORT_PACKET_STATUS
--------------------------------
+SW_ATTR_FIFO_STATUS
+-------------------
 
 Address: 0x28
 
@@ -205,16 +200,18 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ================== ======== ======== ========== =======================================================
-  Name               Index    Type     Reset      Description                                            
-  ================== ======== ======== ========== =======================================================
-  AUX_LINK_RX_WFULL  [0]      RO       0x0        Indicates S-Link AUX RX FIFO is full. Informative only.
-  AUX_LINK_RX_REMPTY [1]      RO       0x0        Indicates S-Link AUX RX FIFO is empty                  
-  ================== ======== ======== ========== =======================================================
+  ======================= ======== ======== ========== ============
+  Name                    Index    Type     Reset      Description 
+  ======================= ======== ======== ========== ============
+  SW_ATTR_SEND_FIFO_FULL  [0]      RO       0x0                    
+  SW_ATTR_SEND_FIFO_EMPTY [1]      RO       0x0                    
+  SW_ATTR_RECV_FIFO_FULL  [2]      RO       0x0                    
+  SW_ATTR_RECV_FIFO_EMPTY [3]      RO       0x0                    
+  ======================= ======== ======== ========== ============
 
 
-SW_ATTR_ADDR_DATA
------------------
+SW_ATTR_SHADOW_UPDATE
+---------------------
 
 Address: 0x2c
 
@@ -223,16 +220,15 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ============ ======== ======== ========== ============================================
-  Name         Index    Type     Reset      Description                                 
-  ============ ======== ======== ========== ============================================
-  SW_ATTR_ADDR [15:0]   RW       0x0        Address for software based attribute updates
-  SW_ATTR_DATA [31:16]  RW       0x0        Data for software based attribute updates   
-  ============ ======== ======== ========== ============================================
+  ===================== ======== ======== ========== ============================================================================================================================================================================
+  Name                  Index    Type     Reset      Description                                                                                                                                                                 
+  ===================== ======== ======== ========== ============================================================================================================================================================================
+  SW_ATTR_SHADOW_UPDATE [0]      WFIFO    0x0        Write a 1 to update the current sw_attr_addr with the current sw_attr_data. If set to local, this will handle a local write, else will create a transation to the other side
+  ===================== ======== ======== ========== ============================================================================================================================================================================
 
 
-SW_ATTR_DATA_READ
------------------
+SW_ATTR_EFFECTIVE_UPDATE
+------------------------
 
 Address: 0x30
 
@@ -241,51 +237,17 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ================= ======== ======== ========== ==========================================================================================================================================================================================
-  Name              Index    Type     Reset      Description                                                                                                                                                                               
-  ================= ======== ======== ========== ==========================================================================================================================================================================================
-  SW_ATTR_DATA_READ [15:0]   RO       0x0        Shadow attribute data based on the sw_attr_addr value. *The sw_attr_data_read is actually only the link_clk, so it is advised to set the sw_attr_addr for several cycles prior to reading*
-  ================= ======== ======== ========== ==========================================================================================================================================================================================
-
-
-SW_ATTR_SHADOW_UPDATE
----------------------
-
-Address: 0x34
-
-Description: 
-
-.. table::
-  :widths: 25 10 10 10 50
-
-  ===================== ======== ======== ========== ============================================================================
-  Name                  Index    Type     Reset      Description                                                                 
-  ===================== ======== ======== ========== ============================================================================
-  SW_ATTR_SHADOW_UPDATE [0]      WFIFO    0x0        Write a 1 to update the current sw_attr_addr with the current sw_attr_data. 
-  ===================== ======== ======== ========== ============================================================================
-
-
-SW_ATTR_EFFECTIVE_UPDATE
-------------------------
-
-Address: 0x38
-
-Description: 
-
-.. table::
-  :widths: 25 10 10 10 50
-
-  ======================== ======== ======== ========== ======================================================================
-  Name                     Index    Type     Reset      Description                                                           
-  ======================== ======== ======== ========== ======================================================================
-  SW_ATTR_EFFECTIVE_UPDATE [0]      WFIFO    0x0        Write a 1 to set the shadow attribute values to the effective values. 
-  ======================== ======== ======== ========== ======================================================================
+  ======================== ======== ======== ========== ============================================================================================================================================
+  Name                     Index    Type     Reset      Description                                                                                                                                 
+  ======================== ======== ======== ========== ============================================================================================================================================
+  SW_ATTR_EFFECTIVE_UPDATE [0]      WFIFO    0x0        Write a 1 to set the shadow attribute values to the effective values. This should only be used prior to removing swreset for initial config.
+  ======================== ======== ======== ========== ============================================================================================================================================
 
 
 STATE_STATUS
 ------------
 
-Address: 0x3c
+Address: 0x34
 
 Description: 
 
@@ -306,7 +268,7 @@ Description:
 DEBUG_BUS_CTRL
 --------------
 
-Address: 0x40
+Address: 0x38
 
 Description: Debug observation bus selection for signals that have a mux override
 
@@ -316,14 +278,14 @@ Description: Debug observation bus selection for signals that have a mux overrid
   ================== ======== ======== ========== ================================
   Name               Index    Type     Reset      Description                     
   ================== ======== ======== ========== ================================
-  DEBUG_BUS_CTRL_SEL [2:0]    RW       0x0        Select signal for DEBUG_BUS_CTRL
+  DEBUG_BUS_CTRL_SEL [1:0]    RW       0x0        Select signal for DEBUG_BUS_CTRL
   ================== ======== ======== ========== ================================
 
 
 DEBUG_BUS_STATUS
 ----------------
 
-Address: 0x44
+Address: 0x3c
 
 Description: Debug observation bus for signals that have a mux override
 

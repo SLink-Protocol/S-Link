@@ -166,9 +166,15 @@ generate
   end
   
   for(genloop = 0; genloop < (DATA_WIDTH*2); genloop = genloop + 1) begin : gen_data_out_sel
+    //Similar to above, the last one for 130 and the last 3 for 132 are not really possible to hit
     if(genloop == ((DATA_WIDTH*2)-1)) begin
-      //This one isn't really possible to hit, but tieoff to ensure no X's
       assign data_out_sel[genloop]             = {DATA_WIDTH+4{1'b0}};
+    end else if(genloop == ((DATA_WIDTH*2)-2)) begin
+      assign data_out_sel[genloop]             = encode_mode == USB_MODE  ? {DATA_WIDTH+4{1'b0}} :
+                                                                            {2'b00, data_comp[genloop+DATA_WIDTH+1:genloop]};
+    end else if(genloop == ((DATA_WIDTH*2)-3)) begin
+      assign data_out_sel[genloop]             = encode_mode == USB_MODE  ? {DATA_WIDTH+4{1'b0}} :
+                                                                            {2'b00, data_comp[genloop+DATA_WIDTH+1:genloop]};
     end else begin
       assign data_out_sel[genloop]             = encode_mode == USB_MODE  ?         data_comp[genloop+DATA_WIDTH+3:genloop] :
                                                                             {2'b00, data_comp[genloop+DATA_WIDTH+1:genloop]};
@@ -397,6 +403,12 @@ always @(*) begin
     end
   
   endcase
+  
+  if(~enable) begin
+    current_alignment_in        = 'd0;
+    start_alignment_in          = 'd0;
+    nstate                      = IDLE;
+  end
 end
 
 
