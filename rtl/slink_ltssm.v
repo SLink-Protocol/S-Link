@@ -44,8 +44,8 @@ module slink_ltssm #(
   input  wire                                 link_p1_req,
   input  wire                                 link_p2_req,
   input  wire                                 link_p3_req,
-  input  wire                                 link_px_req_recv,
-  input  wire                                 link_px_start_recv,
+  input  wire                                 link_px_req_pkt,
+  input  wire                                 link_px_start_pkt,
   output reg                                  in_px_state,
   output reg                                  effect_update,
   
@@ -196,6 +196,9 @@ wire                      enable_gearbox;
 reg   [1:0]               tx_syncheader;
 reg                       ll_enable_in;
 
+reg                       link_px_req_recv, link_px_req_recv_in;
+reg                       link_px_start_recv, link_px_start_recv_in;
+
 
 slink_demet_reset u_slink_demet_reset_enable (
   .clk     ( clk         ),          
@@ -273,6 +276,8 @@ always @(posedge clk or posedge reset) begin
     stall_cycle         <= 1'b0;
     sending_sync        <= 1'b0;
     ll_enable           <= 1'b0;
+    link_px_req_recv    <= 1'b0;
+    link_px_start_recv  <= 1'b0;
   end else begin
     state               <= nstate;
     use_phy_clk         <= use_phy_clk_in;
@@ -298,6 +303,8 @@ always @(posedge clk or posedge reset) begin
     stall_cycle         <= stall_cycle_in;
     sending_sync        <= sending_sync_in;
     ll_enable           <= ll_enable_in;
+    link_px_req_recv    <= link_px_req_recv_in;
+    link_px_start_recv  <= link_px_start_recv_in;
   end
 end 
 
@@ -383,6 +390,8 @@ always @(*) begin
   tx_syncheader             = SH_DATA;
   ll_enable_in              = 1'b0;
   attr_sent                 = 1'b0;
+  link_px_req_recv_in       = 1'b0;
+  link_px_start_recv_in     = 1'b0;
   
   case(state)
     //--------------------------------------
@@ -650,6 +659,8 @@ always @(*) begin
       link_wake_n_in            = 1'b1;
       ll_enable_in              = 1'b1;
       tx_syncheader             = SH_CTRL;
+      link_px_req_recv_in       = link_px_req_pkt   ? 1'b1 : link_px_req_recv;
+      link_px_start_recv_in     = link_px_start_pkt ? 1'b1 : link_px_start_recv;
       
       case(byte_count)
         'd0 : begin
@@ -683,7 +694,7 @@ always @(*) begin
         end
       endcase
             
-      if(byte_count_end && link_px_req_recv) begin
+      if(byte_count_end && link_px_req_recv_in) begin
         px_exit_state_in          = link_p3_req ? 'd3 :
                                     link_p2_req ? 'd2 : 'd1;
         nstate                    = PX_START_ST;
@@ -694,6 +705,7 @@ always @(*) begin
     PX_START_ST : begin
       link_wake_n_in            = 1'b1;
       tx_syncheader             = SH_CTRL;
+      link_px_start_recv_in     = link_px_start_pkt ? 1'b1 : link_px_start_recv;
       
       case(byte_count)
         'd0 : begin
@@ -715,7 +727,7 @@ always @(*) begin
         end
       endcase
             
-      if(byte_count_end && link_px_start_recv) begin
+      if(byte_count_end && link_px_start_recv_in) begin
         count_in                = 'd0;
         nstate                  = P0_EXIT;
       end

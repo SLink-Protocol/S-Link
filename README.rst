@@ -9,12 +9,12 @@ for chiplet communication compared to other protocols.
 
 S-Link supports the following features:
 
-* Mult-lane support (provisions for upto 128+ lanes with asymmetric lane support, **up to 4lanes currently supported**)
+* Mult-lane support (provisions for upto 128+ lanes with asymmetric lane support, **up to 8lanes currently supported**)
+* 128b/130b encoding
 * Parameterizable Applicaiton Data Widths
 * Configurable Attributes for fine tuning link controls and/or active link managemnet
 * Low Power (P states) for power savings
-* ECC/CRC for error checking
-* Parameterizable FIFO sizes for Deskew and AUX channels
+* ECC/CRC for error checking of packet headers and payload data
 * Parameterizable pipeline stages to optimze for frequency and/or power
 
 Documentation
@@ -30,7 +30,7 @@ iverilog
 ++++++++
 ::
 
-  sudo apt-get install bison flex gperf autoconf g++
+  sudo apt-get install bison flex gperf autoconf g++ zlib1g-dev  (zlib for saving in lx2 format)
 
   git clone git://github.com/steveicarus/iverilog.git
   cd iverilog
@@ -45,6 +45,7 @@ iverilog
 gtkwave
 +++++++
 ::
+
   sudo apt-get install -y tcl-dev tk-dev libbz2-dev liblzma-dev
   sudo apt-get install gtk2.0   # you may or may not want this
   
@@ -61,9 +62,12 @@ gtkwave
 
   Verilator may be supported later, but due to serdes models it is unlikely.
 
-S-link Required
-+++++++
+Additional
+++++++++++++++++
+This is primarily for building docs with ReadTheDocs. It is not required to run sims.
+
 ::
+
   sudo apt-get install -y python3-pip python3-testresouces
   cd S-Link
   pip3 install -r requirements.txt

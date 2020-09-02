@@ -429,8 +429,8 @@ slink_ltssm #(
   .link_p1_req             ( link_p1_req                  ),   
   .link_p2_req             ( link_p2_req                  ),   
   .link_p3_req             ( link_p3_req                  ),
-  .link_px_req_recv        ( rx_px_req_pkt                ),
-  .link_px_start_recv      ( rx_px_start_pkt              ),
+  .link_px_req_pkt         ( rx_px_req_pkt                ),
+  .link_px_start_pkt       ( rx_px_start_pkt              ),
   .in_px_state             ( in_px_state                  ), 
   .effect_update           ( effect_update                ),
   
