@@ -56,6 +56,7 @@ tests = {'sanity_test'            : 1,
          'slink_force_hard_reset' : 1}
 
 #tests = {'sanity_test'            : 1}
+tests = {'ecc_corruption'            : 3, 'ecc_corruption'            : 3}
 
 for comp in compile_opts:
   csub = re.sub(r'[^0-9a-zA-Z]+', '_', comp)

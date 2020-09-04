@@ -1542,10 +1542,10 @@ slink_ll_rx_pkt_filt u_slink_ll_rx_pkt_filt (
   .valid_app            ( valid_app       ));
   
                         
-assign ecc_corrected  = active_lanes == ONE_LANE ? corrected && (state == HEADER_ECC) && (nstate != WAIT_SDS) :
-                        active_lanes == TWO_LANE ? corrected && (state == HEADER_WC1) && (nstate != WAIT_SDS) : corrected && (state == IDLE);
-assign ecc_corrupted  = active_lanes == ONE_LANE ? corrupt   && (state == HEADER_ECC) && (nstate != WAIT_SDS) :
-                        active_lanes == TWO_LANE ? corrupt   && (state == HEADER_WC1) && (nstate != WAIT_SDS) : corrupt   && (state == IDLE);
+assign ecc_corrected  = active_lanes == ONE_LANE ? corrected && ((state == HEADER_ECC && DATA_WIDTH==8) || (state == HEADER_WC1 && DATA_WIDTH==16)) && (nstate != WAIT_SDS) :
+                        active_lanes == TWO_LANE ? corrected && ((state == HEADER_WC1 && DATA_WIDTH==8) || (state == IDLE       && DATA_WIDTH==16)) && (nstate != WAIT_SDS) : corrected && (state == IDLE);
+assign ecc_corrupted  = active_lanes == ONE_LANE ? corrupt   && ((state == HEADER_ECC && DATA_WIDTH==8) || (state == HEADER_WC1 && DATA_WIDTH==16)) && (nstate != WAIT_SDS) :
+                        active_lanes == TWO_LANE ? corrupt   && ((state == HEADER_WC1 && DATA_WIDTH==8) || (state == IDLE       && DATA_WIDTH==16)) && (nstate != WAIT_SDS) : corrupt   && (state == IDLE);
 
 slink_ecc_syndrome u_slink_ecc_syndrome (
   .ph_in           ( ph_check         ),               
