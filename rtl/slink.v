@@ -1,4 +1,5 @@
 module slink #(
+  parameter     TRADITIONAL_SERDES_MODE   = 1,
   parameter     NUM_TX_LANES              = 4,
   parameter     NUM_RX_LANES              = 4,
   parameter     PHY_DATA_WIDTH            = 8,
@@ -81,111 +82,73 @@ module slink #(
              
 );
 
-wire                                    apb_clk_scan;
-wire                                    apb_reset_scan;
-wire                                    use_phy_clk;
-wire                                    refclk_scan;
-wire                                    refclk_scan_reset;
+wire                          apb_clk_scan;
+wire                          apb_reset_scan;
+wire                          use_phy_clk;
+wire                          refclk_scan;
+wire                          refclk_scan_reset;
 
-wire [NUM_RX_LANES-1:0]                 rx_ts1_seen;
-wire [NUM_RX_LANES-1:0]                 rx_ts2_seen;
-wire [NUM_RX_LANES-1:0]                 rx_sds_seen;
-wire [(NUM_RX_LANES*PHY_DATA_WIDTH)-1:0]rx_deskew_data;
-wire                                    deskew_enable;
-wire                                    sds_sent;
-wire [(NUM_TX_LANES*PHY_DATA_WIDTH)-1:0]tx_link_data;
-wire                                    ll_tx_valid;
-wire                                    ll_rx_valid_adv;
-wire                                    ll_tx_idle;
-wire                                    ll_enable;
+wire [(NUM_RX_LANES*
+       PHY_DATA_WIDTH)-1:0]   ll_rx_data;
+wire                          ll_tx_sds_sent;
+wire                          ll_rx_sds_recv;
+wire [(NUM_TX_LANES*
+       PHY_DATA_WIDTH)-1:0]   ll_tx_data;
+wire                          ll_tx_valid;
+wire                          ll_rx_valid_adv;
+wire                          ll_tx_idle;
+wire                          ll_enable;
 
-wire [NUM_RX_LANES-1:0]                 rx_clk_scan;
-wire [NUM_RX_LANES-1:0]                 rx_clk_reset;
-
-
-wire          swi_swreset;
-wire          swi_enable;
-
-wire          swi_ecc_corrupted_int_en;
-wire          w1c_in_ecc_corrupted;
-wire          w1c_out_ecc_corrupted;
-wire          swi_ecc_corrected_int_en;
-wire          w1c_in_ecc_corrected;
-wire          w1c_out_ecc_corrected;
-wire          swi_crc_corrupted_int_en;
-wire          w1c_in_crc_corrupted;
-wire          w1c_out_crc_corrupted;
-
-wire          w1c_out_reset_seen;
-wire          w1c_out_wake_seen;
-wire          w1c_out_in_pstate;
-wire          swi_reset_seen_int_en;
-wire          swi_wake_seen_int_en;
-wire          swi_in_pstate_int_en;
+wire [NUM_RX_LANES-1:0]       rx_clk_scan;
+wire [NUM_RX_LANES-1:0]       rx_clk_reset;
 
 
-wire          swi_p1_state_enter;
-wire          swi_p2_state_enter;
-wire          swi_p3_state_enter;
+wire                          swi_swreset;
+wire                          swi_enable;
+wire                          swi_ecc_corrupted_int_en;
+wire                          w1c_in_ecc_corrupted;
+wire                          w1c_out_ecc_corrupted;
+wire                          swi_ecc_corrected_int_en;
+wire                          w1c_in_ecc_corrected;
+wire                          w1c_out_ecc_corrected;
+wire                          swi_crc_corrupted_int_en;
+wire                          w1c_in_crc_corrupted;
+wire                          w1c_out_crc_corrupted;
+wire                          w1c_out_reset_seen;
+wire                          w1c_out_wake_seen;
+wire                          w1c_out_in_pstate;
+wire                          swi_reset_seen_int_en;
+wire                          swi_wake_seen_int_en;
+wire                          swi_in_pstate_int_en;
+wire                          swi_p1_state_enter;
+wire                          swi_p2_state_enter;
+wire                          swi_p3_state_enter;
 
 
-wire          link_attr_shadow_update;
-wire [15:0]   link_attr_addr;
-wire [15:0]   link_attr_data;
-wire [15:0]   link_attr_data_read;
-wire          link_attr_read_req;
+wire [2:0]                    attr_active_txs;
+wire [2:0]                    attr_active_rxs;
 
-
-
-
-
-wire [2:0]    attr_active_txs;
-wire [2:0]    attr_active_rxs;
-wire [9:0]    attr_hard_reset_us;
-wire [7:0]    attr_px_clk_trail;
-wire [15:0]   attr_p1_ts1_tx;
-wire [15:0]   attr_p1_ts1_rx;
-wire [15:0]   attr_p1_ts2_tx;
-wire [15:0]   attr_p1_ts2_rx;
-wire [15:0]   attr_p2_ts1_tx;
-wire [15:0]   attr_p2_ts1_rx;
-wire [15:0]   attr_p2_ts2_tx;
-wire [15:0]   attr_p2_ts2_rx;
-wire [15:0]   attr_p3r_ts1_tx;
-wire [15:0]   attr_p3r_ts1_rx;
-wire [15:0]   attr_p3r_ts2_tx;
-wire [15:0]   attr_p3r_ts2_rx;
-wire [ 7:0]   attr_sync_freq;
-
-
-wire          rx_px_req_pkt;
-wire [2:0]    rx_px_req_state;
-wire          rx_px_rej_pkt;
-wire          rx_px_start_pkt;
-wire          link_p1_req;
-wire          link_p2_req;
-wire          link_p3_req;
-wire          effect_update;
-
-wire          link_active_req;
-wire          ltssm_link_wake_n;
-wire          link_reset_req;
-wire          link_reset_req_local;
-wire          ltssm_link_reset_n;
-wire          swi_link_wake;
-wire          swi_link_reset;
-wire          ll_rx_link_reset_condition;
-wire          link_hard_reset_cond;
-
-wire  [4:0]   ltssm_state ;
-wire  [3:0]   ll_tx_state ;
-wire  [3:0]   ll_rx_state ;
-wire  [1:0]   deskew_state ;
-wire          swi_allow_ecc_corrected;
-wire          swi_ecc_corrected_causes_reset;
-wire          swi_ecc_corrupted_causes_reset;
-wire          swi_crc_corrupted_causes_reset;
-wire  [9:0]   swi_count_val_1us;
+wire                          link_p1_req;
+wire                          link_p2_req;
+wire                          link_p3_req;
+wire                          link_active_req;
+wire                          ltssm_link_wake_n;
+wire                          link_reset_req;
+wire                          link_reset_req_local;
+wire                          ltssm_link_reset_n;
+wire                          swi_link_wake;
+wire                          swi_link_reset;
+wire                          ll_rx_link_reset_condition;
+wire                          link_hard_reset_cond;
+wire  [4:0]                   ltssm_state;
+wire  [3:0]                   ll_tx_state;
+wire  [3:0]                   ll_rx_state;
+wire  [1:0]                   deskew_state;
+wire                          swi_allow_ecc_corrected;
+wire                          swi_ecc_corrected_causes_reset;
+wire                          swi_ecc_corrupted_causes_reset;
+wire                          swi_crc_corrupted_causes_reset;
+wire  [9:0]                   swi_count_val_1us;
 
 
 wire                          ll_tx_sop;
@@ -247,9 +210,9 @@ slink_demet_reset u_slink_demet_reset_px_state_enter[2:0] (
               swi_p1_state_enter_link_clk}  )); 
 
 
-assign link_p1_req = p1_req || rx_px_req_state[0] || swi_p1_state_enter_link_clk;
-assign link_p2_req = p2_req || rx_px_req_state[1] || swi_p2_state_enter_link_clk;
-assign link_p3_req = p3_req || rx_px_req_state[2] || swi_p3_state_enter_link_clk;
+assign link_p1_req = p1_req || swi_p1_state_enter_link_clk;
+assign link_p2_req = p2_req || swi_p2_state_enter_link_clk;
+assign link_p3_req = p3_req || swi_p3_state_enter_link_clk;
 
 //wire [1:0] tempsig = ((32/PHY_DATA_WIDTH) - 'd1);
 wire [1:0] tempsig = PHY_DATA_WIDTH == 8  ? 2'b11 :
@@ -272,8 +235,8 @@ slink_ll_tx #(
   .advance                  ( ll_tx_advance                       ),  
   .delimeter                ( tempsig/*temp*/   ),
   .active_lanes             ( attr_active_txs                     ),  
-  .sds_sent                 ( sds_sent                            ), 
-  .link_data                ( tx_link_data                        ),
+  .sds_sent                 ( ll_tx_sds_sent                      ), 
+  .link_data                ( ll_tx_data                          ),
   .ll_tx_valid              ( ll_tx_valid                         ),
   .link_idle                ( ll_tx_idle                          ),
   .ll_tx_state              ( ll_tx_state                         )); 
@@ -306,7 +269,7 @@ slink_ll_rx #(
   .swi_ecc_corrected_causes_reset     ( swi_ecc_corrected_causes_reset      ),
   .swi_ecc_corrupted_causes_reset     ( swi_ecc_corrupted_causes_reset      ),
   .swi_crc_corrupted_causes_reset     ( swi_crc_corrupted_causes_reset      ),
-  .sds_received                       ( rx_sds_seen[0]                      ),  
+  .sds_received                       ( ll_rx_sds_recv                      ),  
   
   .ecc_corrected                      ( ecc_corrected_link_clk              ),  
   .ecc_corrupted                      ( ecc_corrupted_link_clk              ),  
@@ -315,54 +278,11 @@ slink_ll_rx #(
   .external_link_reset_condition      ( link_reset_req                      ),
   .link_reset_condition               ( ll_rx_link_reset_condition          ),
       
-  .link_data                          ( rx_deskew_data                      ),
+  .link_data                          ( ll_rx_data                          ),
   .ll_rx_valid                        ( ll_rx_valid_adv                     ),
   .ll_rx_state                        ( ll_rx_state                         )); 
 
 
-slink_rx_align_deskew #(
-  //parameters
-  .FIFO_DEPTH         ( DESKEW_FIFO_DEPTH ),
-  .NUM_LANES          ( NUM_RX_LANES      ),
-  .DATA_WIDTH         ( PHY_DATA_WIDTH    )
-) u_slink_rx_align_deskew (
-  .clk                 ( link_clk                 ),  
-  .reset               ( link_clk_reset           ),  
-  .enable              ( deskew_enable            ),  
-  .blockalign          ( (|phy_rx_align)          ),  
-  
-  .rxclk               ( rx_clk_scan              ),
-  .rxclk_reset         ( rx_clk_reset             ),
-  .rx_data_in          ( phy_rx_data              ),  
-  
-  .active_lanes        ( attr_active_rxs          ),  
-  .fifo_ptr_status     ( /*connect me???*/        ),  
-  .rx_ts1_seen         ( rx_ts1_seen              ),  
-  .rx_ts2_seen         ( rx_ts2_seen              ),  
-  .rx_sds_seen         ( rx_sds_seen              ),  
-  .rx_data_out         ( rx_deskew_data           ),    
-  .ll_rx_datavalid     ( ll_rx_valid_adv          ), 
-  
-  .rx_px_req_pkt       ( rx_px_req_pkt            ),
-  .rx_px_req_state     ( rx_px_req_state          ),
-  .rx_px_start_pkt     ( rx_px_start_pkt          ),
-  
-  .attr_addr           ( link_attr_addr           ),
-  .attr_data           ( link_attr_data           ),
-  .attr_update         ( link_attr_shadow_update  ),
-  .attr_rd_req         ( ),
-  
-  .deskew_state        ( deskew_state             )); 
-
-
-//-------------------------------------------
-// LTSSM
-//-------------------------------------------
-wire        ltssm_attr_ready;
-wire [15:0] ltssm_attr_addr;
-wire [15:0] ltssm_attr_wdata;
-wire        ltssm_attr_write;
-wire        ltssm_attr_sent;
 
 wire      swi_link_wake_link_clk;
 wire      slink_gpio_wake_link_clk;
@@ -387,86 +307,6 @@ assign link_reset_req_local = ll_rx_link_reset_condition || swi_link_reset_link_
 assign link_reset_req       = link_reset_req_local || slink_gpio_reset_link_clk;
 
 
-
-slink_ltssm #(
-  //parameters
-  .REGISTER_TXDATA    ( LTSSM_REGISTER_TXDATA ),
-  .NUM_TX_LANES       ( NUM_TX_LANES          ),
-  .NUM_RX_LANES       ( NUM_RX_LANES          ),
-  .DATA_WIDTH         ( PHY_DATA_WIDTH        )
-) u_slink_ltssm (
-  .clk                     ( link_clk                     ),             
-  .reset                   ( link_clk_reset               ),    
-  .refclk                  ( refclk_scan                  ),
-  .refclk_reset            ( refclk_scan_reset            ),
-  .enable                  ( swi_enable                   ),         
-  .p1_ts1_tx_count         ( attr_p1_ts1_tx               ),  
-  .p1_ts1_rx_count         ( attr_p1_ts1_rx               ),  
-  .p1_ts2_tx_count         ( attr_p1_ts2_tx               ),  
-  .p1_ts2_rx_count         ( attr_p1_ts2_rx               ),  
-  .p2_ts1_tx_count         ( attr_p2_ts1_tx               ),  
-  .p2_ts1_rx_count         ( attr_p2_ts1_rx               ),  
-  .p2_ts2_tx_count         ( attr_p2_ts2_tx               ),  
-  .p2_ts2_rx_count         ( attr_p2_ts2_rx               ),  
-  .p3r_ts1_tx_count        ( attr_p3r_ts1_tx              ),  
-  .p3r_ts1_rx_count        ( attr_p3r_ts1_rx              ),  
-  .p3r_ts2_tx_count        ( attr_p3r_ts2_tx              ),  
-  .p3r_ts2_rx_count        ( attr_p3r_ts2_rx              ),  
-  .px_clk_trail            ( {8'd0, attr_px_clk_trail}    ),
-  .swi_clk_switch_time     ( 16'd8                        ),  
-  .swi_p0_exit_time        ( 16'd16                       ),
-  .attr_sync_freq          ( attr_sync_freq               ),
-  .active_rx_lanes         ( attr_active_rxs              ),      
-  .active_tx_lanes         ( attr_active_txs              ),      
-  .use_phy_clk             ( use_phy_clk                  ),  
-  .rx_ts1_seen             ( rx_ts1_seen                  ),  
-  .rx_ts2_seen             ( rx_ts2_seen                  ),  
-  .rx_sds_seen             ( rx_sds_seen                  ),  
-  .sds_sent                ( sds_sent                     ),
-  .deskew_enable           ( deskew_enable                ),
-  
-  
-  .link_p1_req             ( link_p1_req                  ),   
-  .link_p2_req             ( link_p2_req                  ),   
-  .link_p3_req             ( link_p3_req                  ),
-  .link_px_req_pkt         ( rx_px_req_pkt                ),
-  .link_px_start_pkt       ( rx_px_start_pkt              ),
-  .in_px_state             ( in_px_state                  ), 
-  .effect_update           ( effect_update                ),
-  
-  .link_active_req         ( link_active_req              ),
-  .link_wake_n             ( ltssm_link_wake_n            ),
-  .link_reset_req          ( link_reset_req               ),
-  .link_reset_req_local    ( link_reset_req_local         ),
-  .link_reset_n            ( ltssm_link_reset_n           ),
-  .swi_count_val_1us       ( swi_count_val_1us            ),
-  .attr_hard_reset_us      ( attr_hard_reset_us           ),
-  .link_hard_reset_cond    ( link_hard_reset_cond         ),
-  .in_reset_state          ( in_reset_state               ),
-  
-  .attr_ready              ( ltssm_attr_ready             ),
-  .attr_addr               ( ltssm_attr_addr              ),
-  .attr_wdata              ( ltssm_attr_wdata             ),
-  .attr_write              ( ltssm_attr_write             ),
-  .attr_sent               ( ltssm_attr_sent              ),
-  
-  .phy_clk_en              ( phy_clk_en                   ),  
-  .phy_clk_idle            ( phy_clk_idle                 ),
-  .phy_clk_ready           ( phy_clk_ready                ),  
-  .phy_tx_en               ( phy_tx_en                    ),  
-  .phy_tx_ready            ( phy_tx_ready                 ),  
-  .phy_tx_dirdy            ( phy_tx_dirdy                 ),
-  .phy_rx_en               ( phy_rx_en                    ),  
-  .phy_rx_ready            ( phy_rx_ready                 ),  
-  .phy_rx_valid            ( phy_rx_valid                 ),  
-  .phy_rx_dordy            ( phy_rx_dordy                 ),
-  .phy_rx_align            ( phy_rx_align                 ),  
-  .link_data               ( tx_link_data                 ),  
-  .ll_tx_idle              ( ll_tx_idle                   ),
-  .ll_tx_valid             ( ll_tx_valid                  ),
-  .ll_enable               ( ll_enable                    ),
-  .ltssm_data              ( phy_tx_data                  ),
-  .ltssm_state             ( ltssm_state                  )); 
 
 assign slink_gpio_wake_n_oen = ~ltssm_link_wake_n;
 assign slink_gpio_reset_n_oen= ~ltssm_link_reset_n;
@@ -493,109 +333,6 @@ wire          wfifo_sw_attr_effective_update;
 wire          wfifo_winc_sw_attr_effective_update;
 
 
-wire          sw_shadow_update;
-wire          sw_shadow_update_link_clk;
-wire          sw_effective_update;
-wire          sw_effective_update_link_clk;
-
-assign sw_shadow_update       = wfifo_sw_attr_shadow_update    && wfifo_winc_sw_attr_shadow_update;
-assign sw_effective_update    = wfifo_sw_attr_effective_update && wfifo_winc_sw_attr_effective_update;
-
-slink_sync_pulse u_slink_sync_pulse_attr_sw_override[1:0] (
-  .clk_in          ( apb_clk_scan                   ),              
-  .clk_in_reset    ( apb_reset_scan                 ),              
-  .data_in         ( {(sw_shadow_update  && 
-                       swi_sw_attr_local &&
-                       swi_sw_attr_write),
-                      sw_effective_update}          ),              
-  .clk_out         ( link_clk                       ),              
-  .clk_out_reset   ( link_clk_reset                 ),              
-  .data_out        ( {sw_shadow_update_link_clk,
-                      sw_effective_update_link_clk} )); 
-
-
-assign ltssm_attr_ready = ~sw_attr_send_fifo_empty;
-
-slink_attr_ctrl #(
-  //parameters
-  .SW_ATTR_FIFO_DEPTH ( 2         )
-) u_slink_attr_ctrl (
-  .link_clk              ( link_clk                     ),      
-  .link_reset            ( link_clk_reset               ),      
-  .apb_clk               ( apb_clk_scan                 ),   
-  .apb_reset             ( apb_reset_scan               ),   
-  
-  .apb_attr_addr         ( swi_sw_attr_addr             ), 
-  .apb_attr_wdata        ( swi_sw_attr_wdata            ), 
-  .apb_attr_wr           ( swi_sw_attr_write            ), 
-  
-  .apb_send_fifo_winc    ( sw_shadow_update &&
-                           ~swi_sw_attr_local           ),     
-  .apb_send_fifo_rinc    ( ltssm_attr_sent              ),         
-  .apb_send_fifo_full    ( sw_attr_send_fifo_full       ),
-  .apb_send_fifo_empty   ( sw_attr_send_fifo_empty      ),
-  
-  .send_attr_addr        ( ltssm_attr_addr              ),         
-  .send_attr_wdata       ( ltssm_attr_wdata             ),         
-  .send_attr_wr          ( ltssm_attr_write             ),    
-  
-  .recv_attr_rdata       ( 16'd0/*recv_attr_rdata*/              ),  //input -  [15:0]              
-  .apb_recv_fifo_winc    ( 1'b0/*apb_recv_fifo_winc*/           ),  //input -  1              
-  .apb_recv_fifo_rinc    ( rfifo_rinc_sw_attr_rdata &&
-                           swi_sw_attr_local            ),       
-  .apb_recv_fifo_full    ( sw_attr_recv_fifo_full       ), 
-  .apb_recv_fifo_empty   ( sw_attr_recv_fifo_empty      ), 
-  .apb_recv_attr_rdata   ( sw_attr_rdata_fe_fifo        )); 
-
-
-assign rfifo_sw_attr_rdata  = swi_sw_attr_local ? sw_attr_rdata_local : sw_attr_rdata_fe_fifo;
-
-slink_attributes #(
-  .NUM_TX_LANES_CLOG2    ( $clog2(NUM_TX_LANES)         ),
-  .NUM_RX_LANES_CLOG2    ( $clog2(NUM_RX_LANES)         )
-) u_slink_attributes (            
-  .attr_max_txs          (                              ),     
-  .attr_max_rxs          (                              ),     
-  .attr_active_txs       ( attr_active_txs              ),  
-  .attr_active_rxs       ( attr_active_rxs              ),  
-  .attr_hard_reset_us    ( attr_hard_reset_us           ),
-  .attr_px_clk_trail     ( attr_px_clk_trail            ),
-  
-  .attr_p1_ts1_tx        ( attr_p1_ts1_tx               ),  
-  .attr_p1_ts1_rx        ( attr_p1_ts1_rx               ),  
-  .attr_p1_ts2_tx        ( attr_p1_ts2_tx               ),  
-  .attr_p1_ts2_rx        ( attr_p1_ts2_rx               ),  
-  .attr_p2_ts1_tx        ( attr_p2_ts1_tx               ),  
-  .attr_p2_ts1_rx        ( attr_p2_ts1_rx               ),  
-  .attr_p2_ts2_tx        ( attr_p2_ts2_tx               ),  
-  .attr_p2_ts2_rx        ( attr_p2_ts2_rx               ),  
-  .attr_p3r_ts1_tx       ( attr_p3r_ts1_tx              ),  
-  .attr_p3r_ts1_rx       ( attr_p3r_ts1_rx              ),  
-  .attr_p3r_ts2_tx       ( attr_p3r_ts2_tx              ),  
-  .attr_p3r_ts2_rx       ( attr_p3r_ts2_rx              ),  
-  .attr_sync_freq        ( attr_sync_freq               ),
-
-  .clk                   ( link_clk                     ),  
-  .reset                 ( link_clk_reset               ),       
-  .hard_reset_cond       ( link_hard_reset_cond         ),
-  .link_attr_addr        ( link_attr_addr               ),  
-  .link_attr_data        ( link_attr_data               ),  
-  .link_shadow_update    ( link_attr_shadow_update      ),  
-  .link_attr_data_read   ( link_attr_data_read          ),  
-  .app_attr_addr         ( 16'd0                        ),  
-  .app_attr_data         ( 16'd0                        ),  
-  .app_shadow_update     ( 1'b0                         ),  
-  .app_attr_data_read    (                              ),  
-  .sw_attr_addr          ( swi_sw_attr_addr             ), 
-  .sw_attr_data          ( swi_sw_attr_wdata            ), 
-  .sw_shadow_update      ( sw_shadow_update_link_clk    ), 
-  .sw_attr_data_read     ( sw_attr_rdata_local          ),  
-
-   
-  .effective_update      ( effect_update  ||
-                           sw_effective_update_link_clk )); 
-
-
 
 slink_sync_pulse u_slink_sync_pulse_software_w1c[2:0] (
   .clk_in          ( link_clk                 ),              
@@ -615,6 +352,97 @@ assign interrupt = (w1c_out_ecc_corrupted   && swi_ecc_corrupted_int_en) ||
                    (w1c_out_reset_seen      && swi_reset_seen_int_en)    ||
                    (w1c_out_wake_seen       && swi_wake_seen_int_en)     ||
                    (w1c_out_in_pstate       && swi_in_pstate_int_en);
+
+
+
+generate
+  if(TRADITIONAL_SERDES_MODE==1) begin : gen_traditional_serdes
+    slink_serdes_front_end #(
+      .PHY_DATA_WIDTH         ( PHY_DATA_WIDTH          ),
+      .NUM_TX_LANES           ( NUM_TX_LANES            ),
+      .NUM_RX_LANES           ( NUM_RX_LANES            ),
+      .LTSSM_REGISTER_TXDATA  ( LTSSM_REGISTER_TXDATA   ),
+      .DESKEW_FIFO_DEPTH      ( DESKEW_FIFO_DEPTH       ),
+      
+      
+      .P1_TS1_TX_RESET        ( 16        ), 
+      .P1_TS1_RX_RESET        ( 8         ), 
+      .P1_TS2_TX_RESET        ( 8         ), 
+      .P1_TS2_RX_RESET        ( 8         ), 
+      
+      .P2_TS1_TX_RESET        ( 32        ), 
+      .P2_TS1_RX_RESET        ( 16        ), 
+      .P2_TS2_TX_RESET        ( 8         ), 
+      .P2_TS2_RX_RESET        ( 8         ), 
+      
+      .P3R_TS1_TX_RESET       ( 32        ), 
+      .P3R_TS1_RX_RESET       ( 16        ), 
+      .P3R_TS2_TX_RESET       ( 8         ), 
+      .P3R_TS2_RX_RESET       ( 8         ), 
+      .SYNC_FREQ_RESET        ( 15        )  
+    ) u_slink_serdes_front_end (
+      .link_clk                      ( link_clk                             ),  
+      .link_clk_reset                ( link_clk_reset                       ),  
+      .refclk                        ( refclk_scan                          ), 
+      .refclk_reset                  ( refclk_scan_reset                    ), 
+      .apb_clk                       ( apb_clk_scan                         ),  
+      .apb_reset                     ( apb_reset_scan                       ),  
+      .enable                        ( swi_enable                           ),  
+      .use_phy_clk                   ( use_phy_clk                          ), 
+      .link_p1_req                   ( link_p1_req                          ),   
+      .link_p2_req                   ( link_p2_req                          ),   
+      .link_p3_req                   ( link_p3_req                          ),   
+      .in_px_state                   ( in_px_state                          ), 
+      .link_active_req               ( link_active_req                      ), 
+      .ltssm_link_wake_n             ( ltssm_link_wake_n                    ), 
+      .link_reset_req                ( link_reset_req                       ), 
+      .link_reset_req_local          ( link_reset_req_local                 ), 
+      .ltssm_link_reset_n            ( ltssm_link_reset_n                   ),  
+      .in_reset_state                ( in_reset_state                       ),  
+      .swi_count_val_1us             ( swi_count_val_1us                    ),  
+      .sw_attr_addr                  ( swi_sw_attr_addr                     ),  
+      .sw_attr_wdata                 ( swi_sw_attr_wdata                    ),  
+      .sw_attr_write                 ( swi_sw_attr_write                    ),  
+      .sw_attr_local                 ( swi_sw_attr_local                    ),  
+      .sw_attr_data_read             ( rfifo_sw_attr_rdata                  ),  
+      .sw_attr_data_read_rinc        ( rfifo_rinc_sw_attr_rdata             ),  
+      .sw_attr_send_fifo_full        ( sw_attr_send_fifo_full               ),  
+      .sw_attr_send_fifo_empty       ( sw_attr_send_fifo_empty              ),  
+      .sw_attr_recv_fifo_full        ( sw_attr_recv_fifo_full               ),  
+      .sw_attr_recv_fifo_empty       ( sw_attr_recv_fifo_empty              ),  
+      .sw_attr_shadow_update         ( wfifo_sw_attr_shadow_update          ),         
+      .sw_attr_shadow_update_winc    ( wfifo_winc_sw_attr_shadow_update     ),         
+      .sw_attr_effective_update      ( wfifo_sw_attr_effective_update       ),         
+      .sw_attr_effective_update_winc ( wfifo_winc_sw_attr_effective_update  ),         
+      .attr_active_txs               ( attr_active_txs                      ), 
+      .attr_active_rxs               ( attr_active_rxs                      ), 
+      .ll_enable                     ( ll_enable                            ),  
+      .ll_tx_valid                   ( ll_tx_valid                          ),  
+      .ll_tx_idle                    ( ll_tx_idle                           ),  
+      .ll_tx_data                    ( ll_tx_data                           ),  
+      .ll_tx_sds_sent                ( ll_tx_sds_sent                       ),
+      .ll_rx_valid                   ( ll_rx_valid_adv                      ),  
+      .ll_rx_data                    ( ll_rx_data                           ),          
+      .ll_rx_sds_recv                ( ll_rx_sds_recv                       ),
+      .phy_clk_en                    ( phy_clk_en                           ), 
+      .phy_clk_idle                  ( phy_clk_idle                         ), 
+      .phy_clk_ready                 ( phy_clk_ready                        ), 
+      .phy_tx_en                     ( phy_tx_en                            ), 
+      .phy_tx_ready                  ( phy_tx_ready                         ), 
+      .phy_tx_dirdy                  ( phy_tx_dirdy                         ), 
+      .phy_tx_data                   ( phy_tx_data                          ), 
+      .phy_rx_en                     ( phy_rx_en                            ), 
+      .phy_rx_clk                    ( rx_clk_scan                          ), 
+      .phy_rx_clk_reset              ( rx_clk_reset                         ), 
+      .phy_rx_ready                  ( phy_rx_ready                         ), 
+      .phy_rx_valid                  ( phy_rx_valid                         ), 
+      .phy_rx_dordy                  ( phy_rx_dordy                         ), 
+      .phy_rx_align                  ( phy_rx_align                         ), 
+      .phy_rx_data                   ( phy_rx_data                          ));
+  end else begin
+  
+  end
+endgenerate
 
 
 

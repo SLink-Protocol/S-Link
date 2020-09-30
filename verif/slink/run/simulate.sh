@@ -44,6 +44,7 @@ iverilog -g2012 \
   -I$SLINK_TOP/rtl \
   $SLINK_TOP/rtl/*.v \
   $SLINK_TOP/rtl/bist/*.v \
+  $SLINK_TOP/rtl/serdes/*.v \
   $SLINK_TOP/rtl/tech/*.v \
   $SLINK_TOP/verif/slink/sub/slink_cfg.v \
   $SLINK_TOP/verif/slink/tb_top/slink_tb_top.v \
