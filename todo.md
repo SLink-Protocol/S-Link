@@ -4,7 +4,7 @@
 - [ ] Need to look into best way to support more than 4 entries for deskew fifo
 - [ ] Decide if we want to be able to send a *minimum* number of Px Request and Px Start packets before moving
 
-- [ ] Can we remove the crc_valid settings for end of cycles in the LL (TX and RX)? Does this really save any logic?
+- [x] Can we remove the crc_valid settings for end of cycles in the LL (TX and RX)? Does this really save any logic? (small logic savings, but I wil do it)
 - [ ] Remove the byte_count app data selection for first cycle since it would always be indexed to 0. Might be creating unneccesary logic
 - [ ] For some the cases where we have app_data_saved (4lane@16bit, 8lane, etc.) I need to move the app_data_reg_in to a valid_in check
 
