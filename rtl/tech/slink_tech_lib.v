@@ -496,3 +496,163 @@ end
 
  
 endmodule
+
+
+
+/**
+  * Creates a 2-deep fifo for synchronizing multibit signals
+  *
+  * Literally stolen from http://www.sunburst-design.com/papers/CummingsSNUG2008Boston_CDC.pdf
+  * I'm shameless
+  */
+module slink_multibit_sync #(
+  parameter   DATA_SIZE = 8
+)(
+  input  wire                 wclk,
+  input  wire                 wreset,
+  input  wire                 winc,
+  output wire                 wready,
+  input  wire [DATA_SIZE-1:0] wdata,
+  
+  input  wire                 rclk,
+  input  wire                 rreset,
+  input  wire                 rinc,
+  output wire                 rready,
+  output wire [DATA_SIZE-1:0] rdata
+);
+
+reg [DATA_SIZE-1:0]   mem [2];
+
+reg       wptr;
+wire      wptr_in;
+wire      we;
+wire      rptr_wclk;
+
+reg       rptr;
+wire      rptr_in;
+wire      wptr_rclk;
+
+
+always @(posedge wclk or posedge wreset) begin
+  if(wreset) begin
+    wptr        <= 1'b0;
+    mem[0]      <= {DATA_SIZE{1'b0}};
+    mem[1]      <= {DATA_SIZE{1'b0}};
+  end else begin
+    wptr        <= wptr_in;
+    if(we) begin
+      mem[wptr] <= wdata;
+    end
+  end
+end
+
+slink_demet_reset u_slink_demet_rptr_wclk (
+  .clk     ( wclk       ),  
+  .reset   ( wreset     ),  
+  .sig_in  ( rptr       ),  
+  .sig_out ( rptr_wclk  )); 
+
+assign wptr_in  = we ^ wptr;
+assign wready   = ~(rptr_wclk ^ wptr);
+assign we       = winc & wready;
+
+
+
+always @(posedge rclk or posedge rreset) begin
+  if(rreset) begin
+    rptr    <= 1'b0;
+  end else begin
+    rptr    <= rptr_in;
+  end
+end
+
+
+slink_demet_reset u_slink_demet_wptr_rclk (
+  .clk     ( rclk       ),  
+  .reset   ( rreset     ),  
+  .sig_in  ( wptr       ),  
+  .sig_out ( wptr_rclk  )); 
+
+assign rready   = rptr ^ wptr_rclk;
+assign rptr_in  = rptr ^ (rinc & rready);
+
+assign rdata    = mem[rptr];
+
+endmodule
+
+
+
+module slink_dp_ram #(
+   parameter DWIDTH = 32,              // Data width
+   parameter SIZE   = 256,             // RAM size in DWIDTHs
+   parameter BWIDTH = 8,               // Byte width
+   parameter DWORDS = DWIDTH/BWIDTH,   // Data Words per DWIDTH
+   parameter AWIDTH = $clog2(SIZE)     // Address width
+) (
+   input  wire               clk_0,
+   input  wire [AWIDTH-1:0]  addr_0,
+   input  wire               en_0,
+   input  wire               we_0,
+   input  wire [DWORDS-1:0]  be_0,
+   input  wire [DWIDTH-1:0]  wdata_0,
+   output wire [DWIDTH-1:0]  rdata_0,
+
+   input  wire               clk_1,
+   input  wire [AWIDTH-1:0]  addr_1,
+   input  wire               en_1,
+   input  wire               we_1,
+   input  wire [DWORDS-1:0]  be_1,
+   input  wire [DWIDTH-1:0]  wdata_1,
+   output wire [DWIDTH-1:0]  rdata_1
+);
+
+reg   [DWORDS-1:0][BWIDTH-1:0] mem [SIZE-1:0];
+wire  write_0, read_0;
+wire  write_1, read_1;
+reg   [AWIDTH-1:0] addr_0_reg, addr_1_reg;
+
+assign write_0 = en_0 &  we_0;
+assign read_0  = en_0 & ~we_0;
+
+integer i;
+always @(posedge clk_0) begin
+  if (write_0) begin
+    for (i=0; i<DWORDS; i=i+1)
+      if (be_0[i]) begin
+        mem[addr_0][i] <= wdata_0[i*BWIDTH +: BWIDTH];
+      end
+  end
+end
+
+always @(posedge clk_0) begin
+  if (read_0) begin
+    addr_0_reg <= addr_0;
+  end
+end
+
+assign rdata_0 = read_0 ? mem[addr_0] : mem[addr_0_reg];
+
+assign write_1 = en_1 &  we_1;
+assign read_1  = en_1 & ~we_1;
+
+integer j;
+always @(posedge clk_1) begin
+  if (write_1) begin
+    for (j=0; j<DWORDS; j=j+1)
+      if (be_1[j]) begin
+        mem[addr_1][j] <= wdata_1[j*BWIDTH +: BWIDTH];
+      end
+  end
+end
+
+always @(posedge clk_1) begin
+  if (read_1) begin
+    addr_1_reg <= addr_1;
+  end
+end
+
+assign rdata_1 = read_1 ? mem[addr_1] : mem[addr_1_reg];
+   
+endmodule
+
+

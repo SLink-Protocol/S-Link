@@ -138,6 +138,17 @@ initial begin
 end
 
 
+initial begin
+  if($test$plusargs("NO_WAVES")) begin
+    `sim_info($display("No waveform saving this sim"))
+  end else begin
+    $dumpvars(0);
+    
+  end
+  #1ms;
+  `sim_fatal($display("sim timeout"));
+  $finish();
+end
 
 
 endmodule

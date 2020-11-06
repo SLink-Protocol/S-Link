@@ -876,6 +876,7 @@ always @(*) begin
                                            link_data[ 7: 0]};
 
                 valid_in                = byte_count[APP_DATA_BYTES_CLOG2-1:0] == {{APP_DATA_BYTES_CLOG2-2{1'b1}}, 2'b00};
+                //valid_in                = (APP_DATA_BYTES - byte_count[APP_DATA_BYTES_CLOG2-1:0]) == 'd4;
                 byte_count_in           = byte_count + 'd4;
                 if(byte_count_in >= word_count_reg) begin
                   //valid_in              = 1'b1;
