@@ -177,7 +177,7 @@ wire slv_slink_gpio_wake_n_oen;
 wire slv_slink_gpio_wake_n    ;
 
 
-`include "slink_drivers_inst.vh"
+
 
 slink #(
   //parameters

@@ -1,3 +1,7 @@
+/**
+  *   Set the A2L Data width to be maximum + word count + data type
+  *
+  */
 module slink_generic_fc_sm #(
   //-----------------------------
   // App -> Link layer

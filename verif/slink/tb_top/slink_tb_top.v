@@ -122,7 +122,11 @@ module tb_top;
 `include "slink_msg.v"
 `include "slink_tests.vh"
 
+//Usually shared
 `include "slink_inst.vh"
+
+//Per TB
+`include "slink_drivers_inst.vh"
 
 initial begin  
   #1ps;

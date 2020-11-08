@@ -75,7 +75,7 @@ always @(posedge clk or posedge reset) begin
   if(reset) begin
     curr_ch_reg       <= {NUM_CHANNELS_CLOG2{1'b0}};
   end else begin
-    curr_ch_reg       <= curr_ch_reg_in;
+    curr_ch_reg       <= enable_ff2 ? curr_ch_reg_in : {NUM_CHANNELS_CLOG2{1'b0}};
   end
 end
 
