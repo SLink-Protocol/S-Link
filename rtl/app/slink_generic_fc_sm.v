@@ -35,11 +35,14 @@ module slink_generic_fc_sm #(
   input  wire                           l2a_accept,
   output wire [L2A_DATA_WIDTH-1:0]      l2a_data,
   
-  output wire                           tx_fifo_empty,
-  output wire                           rx_fifo_empty,
+  output wire                           tx_fifo_empty,    
+  output wire                           rx_fifo_empty,    
   
   input  wire                           link_clk,
   input  wire                           link_reset,
+  
+  output wire                           nack_sent,        //on link_clk
+  output wire                           nack_seen,        //on link_clk
   
   output reg                            tx_sop,
   output reg  [7:0]                     tx_data_id,
@@ -207,6 +210,9 @@ slink_generic_fc_replay #(
   .link_valid          ( link_valid_replay    ),  
   .link_advance        ( link_advance_replay  )); 
 
+
+assign nack_sent            = (state == SEND_NACK) && (nstate != SEND_NACK);
+assign nack_seen            = link_revert;
 
 assign link_ack_update      = valid_rx_pkt && (rx_data_id == GENERIC_ACK);
 assign link_ack_addr        = rx_word_count[A2L_ADDR_WDITH:0];
@@ -441,7 +447,8 @@ assign last_good_pkt_in = exp_pkt_seen ? exp_pkt_num : last_good_pkt;
 
 
 
-assign fifo_wdata = {rx_app_data[L2A_DATA_WIDTH-24+8:8], rx_word_count, rx_data_id};
+//assign fifo_wdata = {rx_app_data[L2A_DATA_WIDTH-24+8:8], rx_word_count, rx_data_id};
+assign fifo_wdata = {rx_app_data[L2A_DATA_WIDTH-15:8], rx_word_count, rx_data_id};
 
 slink_fc_replay_addr_sync #(
   //parameters

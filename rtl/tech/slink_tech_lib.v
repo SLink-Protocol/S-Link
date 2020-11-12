@@ -585,15 +585,12 @@ endmodule
 module slink_dp_ram #(
    parameter DWIDTH = 32,              // Data width
    parameter SIZE   = 256,             // RAM size in DWIDTHs
-   parameter BWIDTH = 8,               // Byte width
-   parameter DWORDS = DWIDTH/BWIDTH,   // Data Words per DWIDTH
    parameter AWIDTH = $clog2(SIZE)     // Address width
 ) (
    input  wire               clk_0,
    input  wire [AWIDTH-1:0]  addr_0,
    input  wire               en_0,
    input  wire               we_0,
-   input  wire [DWORDS-1:0]  be_0,
    input  wire [DWIDTH-1:0]  wdata_0,
    output wire [DWIDTH-1:0]  rdata_0,
 
@@ -601,12 +598,11 @@ module slink_dp_ram #(
    input  wire [AWIDTH-1:0]  addr_1,
    input  wire               en_1,
    input  wire               we_1,
-   input  wire [DWORDS-1:0]  be_1,
    input  wire [DWIDTH-1:0]  wdata_1,
    output wire [DWIDTH-1:0]  rdata_1
 );
 
-reg   [DWORDS-1:0][BWIDTH-1:0] mem [SIZE-1:0];
+reg   [DWIDTH-1:0] mem [SIZE-1:0];
 wire  write_0, read_0;
 wire  write_1, read_1;
 reg   [AWIDTH-1:0] addr_0_reg, addr_1_reg;
@@ -617,10 +613,7 @@ assign read_0  = en_0 & ~we_0;
 integer i;
 always @(posedge clk_0) begin
   if (write_0) begin
-    for (i=0; i<DWORDS; i=i+1)
-      if (be_0[i]) begin
-        mem[addr_0][i] <= wdata_0[i*BWIDTH +: BWIDTH];
-      end
+    mem[addr_0] <= wdata_0;
   end
 end
 
@@ -638,10 +631,7 @@ assign read_1  = en_1 & ~we_1;
 integer j;
 always @(posedge clk_1) begin
   if (write_1) begin
-    for (j=0; j<DWORDS; j=j+1)
-      if (be_1[j]) begin
-        mem[addr_1][j] <= wdata_1[j*BWIDTH +: BWIDTH];
-      end
+    mem[addr_1] <= wdata_1;
   end
 end
 

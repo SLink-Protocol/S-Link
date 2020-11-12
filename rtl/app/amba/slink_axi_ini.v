@@ -159,8 +159,8 @@ generate
     
     assign ini_wid      = l2a_data[31:24];
     assign ini_wlast    = l2a_data[32];
-    assign ini_wstrb    = l2a_data[33+(AXI_DATA_WIDTH/8):33];
-    assign ini_wdata    = l2a_data[33+(AXI_DATA_WIDTH/8)+1+AXI_DATA_WIDTH:33+(AXI_DATA_WIDTH/8)+1];
+    assign ini_wstrb    = l2a_data[33+(AXI_DATA_WIDTH/8)-1:33];
+    assign ini_wdata    = l2a_data[33+(AXI_DATA_WIDTH/8)+1+AXI_DATA_WIDTH-1 : 33+(AXI_DATA_WIDTH/8)];
     assign ini_wvalid   = (l2a_data[ 7: 0] == W_PKT_DT) && l2a_valid;
     
     assign ini_arid     = l2a_data[31:24];

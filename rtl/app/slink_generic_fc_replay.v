@@ -165,15 +165,13 @@ slink_dp_ram #(
   .addr_0    ( a2l_app_addr[A2L_ADDR_WDITH-1:0]       ),  
   .en_0      ( a2l_write                              ),  
   .we_0      ( a2l_write                              ),  
-  .be_0      ( {A2L_DATA_WIDTH/8{1'b1}}               ),  
   .wdata_0   ( a2l_data                               ),  
   .rdata_0   (                                        ),  
   
   .clk_1     ( link_clk                               ),
   .addr_1    ( a2l_link_addr_real[A2L_ADDR_WDITH-1:0] ),  
   .en_1      ( a2l_read                               ),  
-  .we_1      ( 1'b0                                   ),  
-  .be_1      ( {A2L_DATA_WIDTH/8{1'b1}}               ),  
+  .we_1      ( 1'b0                                   ),   
   .wdata_1   ( {A2L_DATA_WIDTH{1'b0}}                 ),  
   .rdata_1   ( link_data                              )); 
 
