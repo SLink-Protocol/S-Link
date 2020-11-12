@@ -18,12 +18,17 @@ module slink_generic_fc_replay #(
   input  wire                         a2l_valid,
   output wire                         a2l_ready,
   input  wire [A2L_DATA_WIDTH-1:0]    a2l_data,
+  
+  output wire                         empty,
     
   //--------------------------
   // Link Side
   //--------------------------
   input  wire                         link_ack_update,
   input  wire [A2L_ADDR_WDITH:0]      link_ack_addr,
+  
+  input  wire                         link_revert,
+  input  wire [A2L_ADDR_WDITH:0]      link_revert_addr,
   
   output wire [A2L_ADDR_WDITH:0]      link_cur_addr,
   output wire [A2L_DATA_WIDTH-1:0]    link_data,
@@ -134,17 +139,18 @@ always @(posedge link_clk or posedge link_reset) begin
 end
 
 
-
+//This is on the link_clk_domain
 assign a2l_empty          = (a2l_link_addr_real[A2L_ADDR_WDITH]     == a2l_app_addr_link_clk[A2L_ADDR_WDITH]) &&
                             (a2l_link_addr_real[A2L_ADDR_WDITH-1:0] == a2l_app_addr_link_clk[A2L_ADDR_WDITH-1:0]);
-
+assign empty              = a2l_empty;  
 //The "REAL" link address is what we are actually reading from in the FIFO
 //BUT we send the last known good packet address back to the APP layer, this way
 //if we need to do a replay, we can and the app hasn't overwritten the packet
 
-assign a2l_link_addr_real_in  = enable_link_clk ? (link_advance && link_valid ? a2l_link_addr_real + 'd1 : a2l_link_addr_real) : {A2L_ADDR_WDITH+1{1'b0}};
+//The revert will take precedence over the link_advance (since we are going to re-transmit anyways)
+assign a2l_link_addr_real_in  = enable_link_clk ? link_revert ? link_revert_addr : (link_advance && link_valid ? a2l_link_addr_real + 'd1 : a2l_link_addr_real) : {A2L_ADDR_WDITH+1{1'b0}};
 assign a2l_link_addr_in       = link_ack_update ? link_ack_addr : a2l_link_addr;
-assign link_valid             = ~a2l_empty;
+assign link_valid             = enable_link_clk ? ~a2l_empty : 1'b0;
 
 assign a2l_read               = link_valid;
 
@@ -154,7 +160,7 @@ slink_dp_ram #(
   //parameters
   .SIZE               ( A2L_DEPTH       ),
   .DWIDTH             ( A2L_DATA_WIDTH  )
-) u_a2f_dp_ram (
+) u_a2l_dp_ram (
   .clk_0     ( app_clk                                ),  
   .addr_0    ( a2l_app_addr[A2L_ADDR_WDITH-1:0]       ),  
   .en_0      ( a2l_write                              ),  
