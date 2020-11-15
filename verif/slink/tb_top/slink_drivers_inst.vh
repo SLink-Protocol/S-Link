@@ -26,14 +26,14 @@ slink_app_driver #(
   
   .apb_clk           ( apb_clk                ), 
   .apb_reset         ( main_reset             ), 
-  .apb_paddr         ( apb_paddr              ), 
-  .apb_pwrite        ( apb_pwrite             ), 
-  .apb_psel          ( apb_psel               ), 
-  .apb_penable       ( apb_penable            ), 
-  .apb_pwdata        ( apb_pwdata             ), 
-  .apb_prdata        ( apb_prdata             ), 
-  .apb_pready        ( apb_pready             ), 
-  .apb_pslverr       ( apb_pslverr            ));
+  .apb_paddr         ( mst_apb_paddr          ), 
+  .apb_pwrite        ( mst_apb_pwrite         ), 
+  .apb_psel          ( mst_apb_psel           ), 
+  .apb_penable       ( mst_apb_penable        ), 
+  .apb_pwdata        ( mst_apb_pwdata         ), 
+  .apb_prdata        ( mst_apb_prdata         ), 
+  .apb_pready        ( mst_apb_pready         ), 
+  .apb_pslverr       ( mst_apb_pslverr        ));
 
 
 slink_app_driver #(

@@ -523,15 +523,15 @@ task ecc_correction;
       driver_m2s.sendRandomShortPacket;
     end
     begin
-      wait((u_slink_MASTER.u_slink_ll_tx.state == 'd1) && 
-           (u_slink_MASTER.u_slink_ll_tx.sop == 1'b1) &&
-           (u_slink_MASTER.u_slink_ll_tx.delim_start == 1'b1)); //wait for it to not be idle
+      wait((u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.state == 'd1) && 
+           (u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.sop == 1'b1) &&
+           (u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.delim_start == 1'b1)); //wait for it to not be idle
       #1ps;
 
-      bit_corrupt = ph_err_inj(u_slink_MASTER.u_slink_ll_tx.link_data_reg_in, 0);
-      force u_slink_MASTER.u_slink_ll_tx.link_data_reg_in = bit_corrupt;
-      @(posedge u_slink_MASTER.u_slink_ll_tx.clk);
-      release u_slink_MASTER.u_slink_ll_tx.link_data_reg_in;
+      bit_corrupt = ph_err_inj(u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.link_data_reg_in, 0);
+      force u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.link_data_reg_in = bit_corrupt;
+      @(posedge u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.clk);
+      release u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.link_data_reg_in;
       
     end
   join
@@ -569,15 +569,15 @@ task ecc_corruption;
       driver_m2s.sendRandomShortPacket;
     end
     begin
-      wait((u_slink_MASTER.u_slink_ll_tx.state == 'd1) && 
-           (u_slink_MASTER.u_slink_ll_tx.sop == 1'b1) &&
-           (u_slink_MASTER.u_slink_ll_tx.delim_start == 1'b1)); //wait for it to not be idle
+      wait((u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.state == 'd1) && 
+           (u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.sop == 1'b1) &&
+           (u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.delim_start == 1'b1)); //wait for it to not be idle
       #1ps;
 
-      bit_corrupt = ph_err_inj(u_slink_MASTER.u_slink_ll_tx.link_data_reg_in, 1);
-      force u_slink_MASTER.u_slink_ll_tx.link_data_reg_in = bit_corrupt;
-      @(posedge u_slink_MASTER.u_slink_ll_tx.clk);
-      release u_slink_MASTER.u_slink_ll_tx.link_data_reg_in;
+      bit_corrupt = ph_err_inj(u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.link_data_reg_in, 1);
+      force u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.link_data_reg_in = bit_corrupt;
+      @(posedge u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.clk);
+      release u_slink_b2b_tb_wrapper.u_slink_MASTER.u_slink_ll_tx.link_data_reg_in;
       
     end
   join

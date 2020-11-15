@@ -190,7 +190,13 @@ generate
     ) u_slink_generic_fc_sm (
       .app_clk           ( axi_clk            ),    
       .app_reset         ( axi_reset          ),    
-      .enable            ( enable             ),    
+      .enable            ( enable             ),
+          
+      .swi_cr_id         ( 8'h12              ),
+      .swi_crack_id      ( 8'h13              ),
+      .swi_ack_id        ( 8'h10              ),
+      .swi_nack_id       ( 8'h11              ),
+      
       .a2l_valid         ( a2l_valid          ),  
       .a2l_ready         ( a2l_ready          ),  
       .a2l_data          ( a2l_data           ),     

@@ -228,7 +228,7 @@ slink_ltssm #(
   .ll_tx_valid             ( ll_tx_valid                        ),
   .ll_enable               ( ll_enable                          ),
   .ltssm_data              ( phy_tx_data                        ),
-  .ltssm_state             ( ltssm_state                        )); 
+  .ltssm_state             (                                    )); 
 
 
 assign ll_rx_sds_recv = (&rx_sds_seen);
@@ -265,7 +265,7 @@ slink_rx_align_deskew #(
   .attr_update         ( link_attr_shadow_update  ),
   .attr_rd_req         (                          ),
   
-  .deskew_state        ( deskew_state             )); 
+  .deskew_state        (               )); 
 
 
 wire [15:0]   sw_attr_rdata_fe_fifo;     

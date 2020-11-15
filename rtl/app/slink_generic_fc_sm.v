@@ -1,7 +1,25 @@
-/**
-  *   Set the A2L Data width to be maximum + word count + data type
-  *
-  */
+/*
+.rst_start
+slink_generic_fc_sm
+-------------------
+This block, known also as "FC block", handles several flow control related items when communicating across S-Link. It houses a 
+"generic" flow control mechanism that should serve well for the majority of applications. While there
+may be some improvements that can be acheived by spinning your own flow control block, this provides
+a component for creating larger systems. Several of these can be placed for an application, with the idea
+being that you would use a ref:`slink_generic_tx_router` and ref:`slink_generic_rx_router` to route traffic
+appropriately.
+
+
+.. todo ::
+
+  * Training
+  * Credits/Counters
+  * Replay buffer
+  * ACk/Nack 
+  * Hardcoded vs multi-channel
+
+.rst_end
+*/
 module slink_generic_fc_sm #(
   //-----------------------------
   // App -> Link layer
@@ -26,6 +44,11 @@ module slink_generic_fc_sm #(
   input  wire                           app_reset,
   
   input  wire                           enable,
+  
+  input  wire [7:0]                     swi_cr_id,
+  input  wire [7:0]                     swi_crack_id,
+  input  wire [7:0]                     swi_ack_id,
+  input  wire [7:0]                     swi_nack_id,
   
   input  wire                           a2l_valid,
   output wire                           a2l_ready,
@@ -58,11 +81,6 @@ module slink_generic_fc_sm #(
   input  wire                           rx_crc_corrupted
 );
 
-localparam  GENERIC_ACK   = 8'h10,
-            GENERIC_NACK  = 8'h11,
-            GENERIC_SCRD  = 8'h12,
-            GENERIC_CR_ACK= 8'h13;
-
 localparam  IDLE              = 'd0,
             SEND_CREDITS1     = 'd1,
             SEND_CREDITS2     = 'd2,
@@ -71,6 +89,12 @@ localparam  IDLE              = 'd0,
             SEND_ACK          = 'd5,
             SEND_NACK         = 'd6;
             
+
+
+wire [7:0]  GENERIC_ACK   = swi_ack_id;
+wire [7:0]  GENERIC_NACK  = swi_nack_id;
+wire [7:0]  GENERIC_SCRD  = swi_cr_id;
+wire [7:0]  GENERIC_CR_ACK= swi_crack_id;
 
 reg   [2:0]     state, nstate;
 wire            enable_link_clk;
@@ -108,31 +132,37 @@ reg   [7:0]     ne_rx_ptr;
 reg   [7:0]     ne_rx_ptr_in;
 wire  [7:0]     ne_rx_ptr_next;
 
-wire                      link_ack_update;
-wire [A2L_ADDR_WDITH:0]   link_ack_addr;
-wire [A2L_ADDR_WDITH:0]   link_cur_addr;
-wire [7:0]                link_cur_addr_8bit;
-wire [A2L_DATA_WIDTH-1:0] link_data_replay;
-wire                      link_valid_replay;
-reg                       link_advance_replay;
+wire                          link_ack_update;
+wire [A2L_ADDR_WDITH:0]       link_ack_addr;
+wire [A2L_ADDR_WDITH:0]       link_cur_addr;
+wire [7:0]                    link_cur_addr_8bit;
+wire [A2L_DATA_WIDTH-1:0]     link_data_replay;
+wire                          link_valid_replay;
+reg                           link_advance_replay;
 
 
-wire                      rempty;
-wire                      wfull;
-wire [L2A_DATA_WIDTH-1:0] fifo_wdata;
-wire [L2A_ADDR_WDITH:0]   fifo_rbin_ptr;
-reg  [L2A_ADDR_WDITH:0]   fifo_rbin_ptr_prev;
-wire                      fifo_rbin_ptr_update;
-wire [L2A_ADDR_WDITH:0]   fifo_rbin_ptr_link_clk;
+wire                          rempty;
+wire                          wfull;
+wire [L2A_DATA_WIDTH-1:0]     fifo_wdata;
+wire [L2A_ADDR_WDITH:0]       fifo_rbin_ptr;
+reg  [L2A_ADDR_WDITH:0]       fifo_rbin_ptr_prev;
+wire                          fifo_rbin_ptr_update;
+wire [L2A_ADDR_WDITH:0]       fifo_rbin_ptr_link_clk;
 
-wire                      link_revert;
-wire [A2L_ADDR_WDITH:0]   link_revert_addr;
+wire                          link_revert;
+wire [A2L_ADDR_WDITH:0]       link_revert_addr;
 
 
-reg             tx_sop_in;
-reg   [7:0]     tx_data_id_in;
-reg   [15:0]    tx_word_count_in;
+reg                           tx_sop_in;
+reg   [7:0]                   tx_data_id_in;
+reg   [15:0]                  tx_word_count_in;
 reg   [TX_APP_DATA_WIDTH-1:0] tx_app_data_in;
+
+wire  [7:0]                   tx_data_id_sel;
+wire  [15:0]                  tx_word_count_sel;
+wire  [TX_APP_DATA_WIDTH-1:0] tx_app_data_sel;
+
+
 
 slink_demet_reset u_slink_demet_reset_enable_link_clk (
   .clk     ( link_clk       ),  
@@ -220,7 +250,7 @@ assign link_ack_addr        = rx_word_count[A2L_ADDR_WDITH:0];
 assign link_revert          = valid_rx_pkt && (rx_data_id == GENERIC_NACK);
 
 //We will get back the last good packet, so we need to do the last good +1
-assign link_revert_addr     = rx_word_count[A2L_ADDR_WDITH:0] == ne_tx_credit_max ? 'd0 : rx_word_count[A2L_ADDR_WDITH:0] + 'd1;
+assign link_revert_addr     = (rx_word_count[A2L_ADDR_WDITH:0] == ne_tx_credit_max) ? 'd0 : rx_word_count[A2L_ADDR_WDITH:0] + 'd1;
 
 assign link_cur_addr_8bit   = {{(7-A2L_ADDR_WDITH){1'b0}}, link_cur_addr};
 
@@ -261,6 +291,20 @@ always @(*) begin
     fe_rx_is_full = 1'b0;
   end
 end
+
+
+//Picks between the hardcorded and passed through method
+generate
+  if(USE_HARDCODED_DTWC == 1) begin : gen_hardcoded_dtwc
+    assign tx_data_id_sel     = HARDCODED_DT;
+    assign tx_word_count_sel  = HARDCODED_WC + 16'h1;
+    assign tx_app_data_sel    = {{TX_APP_DATA_WIDTH-A2L_DATA_WIDTH-8{1'b0}},  link_data_replay[A2L_DATA_WIDTH-1:8],  link_cur_addr_8bit};
+  end else begin : gen_app_dtwc
+    assign tx_data_id_sel     = link_data_replay[ 7: 0];
+    assign tx_word_count_sel  = link_data_replay[23: 8] + 16'h1;
+    assign tx_app_data_sel    = {{TX_APP_DATA_WIDTH-A2L_DATA_WIDTH-32{1'b0}}, link_data_replay[A2L_DATA_WIDTH-1:24], link_cur_addr_8bit};
+  end
+endgenerate
 
 
 always @(*) begin
@@ -372,9 +416,9 @@ always @(*) begin
       
       if(link_valid_replay && ~fe_rx_is_full) begin
         tx_sop_in             = 1'b1;
-        tx_data_id_in         = link_data_replay[ 7: 0];
-        tx_word_count_in      = link_data_replay[23: 8] + 1; //add pkt num
-        tx_app_data_in        = {{TX_APP_DATA_WIDTH-A2L_DATA_WIDTH-32{1'b0}}, link_data_replay[A2L_DATA_WIDTH-1:24], link_cur_addr_8bit};
+        tx_data_id_in         = tx_data_id_sel;
+        tx_word_count_in      = tx_word_count_sel; 
+        tx_app_data_in        = tx_app_data_sel;
         link_advance_replay   = 1'b1;     //go ahead and clear this one
         ne_rx_ptr_in          = ne_rx_ptr_next;
         nstate                = LINK_DATA;
@@ -394,9 +438,9 @@ always @(*) begin
           nstate                = SEND_NACK;
         end else if(~send_ack_req && link_valid_replay && ~fe_rx_is_full) begin
           tx_sop_in             = 1'b1;
-          tx_data_id_in         = link_data_replay[ 7: 0];
-          tx_word_count_in      = link_data_replay[23: 8] + 1; //add pkt num
-          tx_app_data_in        = {{TX_APP_DATA_WIDTH-A2L_DATA_WIDTH-32{1'b0}}, link_data_replay[A2L_DATA_WIDTH-1:24], link_cur_addr_8bit};
+          tx_data_id_in         = tx_data_id_sel;
+          tx_word_count_in      = tx_word_count_sel;
+          tx_app_data_in        = tx_app_data_sel;
           link_advance_replay   = 1'b1;     
           ne_rx_ptr_in          = ne_rx_ptr_next;
         end else begin
@@ -448,7 +492,15 @@ assign last_good_pkt_in = exp_pkt_seen ? exp_pkt_num : last_good_pkt;
 
 
 //assign fifo_wdata = {rx_app_data[L2A_DATA_WIDTH-24+8:8], rx_word_count, rx_data_id};
-assign fifo_wdata = {rx_app_data[L2A_DATA_WIDTH-15:8], rx_word_count, rx_data_id};
+//assign fifo_wdata = {rx_app_data[L2A_DATA_WIDTH-15:8], rx_word_count, rx_data_id};
+
+generate
+  if(USE_HARDCODED_DTWC == 1) begin : gen_hardcoded_rxdata
+    assign fifo_wdata = rx_app_data[L2A_DATA_WIDTH+7:8];
+  end else begin : gen_app_rxdata
+    assign fifo_wdata = {rx_app_data[L2A_DATA_WIDTH-15:8], rx_word_count, rx_data_id};
+  end
+endgenerate
 
 slink_fc_replay_addr_sync #(
   //parameters
@@ -512,3 +564,4 @@ end
 `endif
 
 endmodule
+

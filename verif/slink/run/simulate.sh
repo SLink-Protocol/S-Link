@@ -50,6 +50,7 @@ iverilog -g2012 \
   $SLINK_TOP/verif/slink/tb_top/slink_tb_top.v \
   $SLINK_TOP/verif/slink/tb_top/serdes_phy_model.v \
   $SLINK_TOP/verif/slink/tb_top/slink_gpio_model.v \
+  $SLINK_TOP/verif/slink/tb_top/slink_b2b_tb_wrapper.v \
   $SLINK_TOP/verif/slink/sub/slink_app_monitor.v \
   $SLINK_TOP/verif/slink/sub/slink_app_driver.v \
   $SLINK_TOP/verif/slink/sub/slink_apb_driver.v \

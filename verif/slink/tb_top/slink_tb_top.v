@@ -119,6 +119,9 @@ new changes and most users of S-Link shouldn't have to run them.
 
 module tb_top;
 
+//Parameters/Defines for config
+`include "slink_cfg_params.vh"
+
 `include "slink_msg.v"
 `include "slink_tests.vh"
 
@@ -127,6 +130,7 @@ module tb_top;
 
 //Per TB
 `include "slink_drivers_inst.vh"
+
 
 initial begin  
   #1ps;
