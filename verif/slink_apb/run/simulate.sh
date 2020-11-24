@@ -28,7 +28,7 @@ fi
 
 
 
-VVP_FILE=slink_tb
+VVP_FILE=slink_apb_tb
 SLINK_TOP=../../..
 
 
@@ -46,8 +46,10 @@ iverilog -g2012 \
   $SLINK_TOP/rtl/bist/*.v \
   $SLINK_TOP/rtl/serdes/*.v \
   $SLINK_TOP/rtl/tech/*.v \
+  $SLINK_TOP/rtl/app/*.v \
+  $SLINK_TOP/rtl/app/amba/*apb*.v \
   $SLINK_TOP/verif/slink/sub/slink_cfg.v \
-  $SLINK_TOP/verif/slink/tb_top/slink_tb_top.v \
+  $SLINK_TOP/verif/slink_apb/tb_top/slink_apb_tb_top.v \
   $SLINK_TOP/verif/slink/tb_top/serdes_phy_model.v \
   $SLINK_TOP/verif/slink/tb_top/slink_simple_io_phy_model.v \
   $SLINK_TOP/verif/slink/tb_top/slink_gpio_model.v \
@@ -55,11 +57,12 @@ iverilog -g2012 \
   $SLINK_TOP/verif/slink/sub/slink_app_monitor.v \
   $SLINK_TOP/verif/slink/sub/slink_app_driver.v \
   $SLINK_TOP/verif/slink/sub/slink_apb_driver.v \
+  $SLINK_TOP/verif/slink_apb/sub/slink_apb_app_driver_monitor.v \
   -I$SLINK_TOP/verif/slink/sub \
   -I$SLINK_TOP/verif/slink/tests \
   -I$SLINK_TOP/verif/slink/tb_top \
   $compargs \
-  -o slink_tb
+  -o $VVP_FILE
   
 
 if [ -z $regress ] 

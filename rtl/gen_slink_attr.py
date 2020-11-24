@@ -101,7 +101,24 @@ endmodule
 
 module slink_attributes #(
   parameter NUM_TX_LANES_CLOG2 = 2,
-  parameter NUM_RX_LANES_CLOG2 = 2
+  parameter NUM_RX_LANES_CLOG2 = 2,
+  parameter P1_TS1_TX_RESET    = 16, 
+  parameter P1_TS1_RX_RESET    = 16,  
+  parameter P1_TS2_TX_RESET    = 4,  
+  parameter P1_TS2_RX_RESET    = 4,  
+  
+  parameter P2_TS1_TX_RESET    = 32, 
+  parameter P2_TS1_RX_RESET    = 32, 
+  parameter P2_TS2_TX_RESET    = 8,  
+  parameter P2_TS2_RX_RESET    = 8,  
+  
+  parameter P3R_TS1_TX_RESET   = 32, 
+  parameter P3R_TS1_RX_RESET   = 32, 
+  parameter P3R_TS2_TX_RESET   = 8,  
+  parameter P3R_TS2_RX_RESET   = 8,  
+  parameter PX_CLK_TRAIL_RESET = 32,
+  
+  parameter SYNC_FREQ_RESET    = 15 
 )(
   //Attributes
 """
@@ -263,20 +280,20 @@ attr = { 0x0  : SlinkAttr(name='max_txs',      width=3,  rst='NUM_TX_LANES_CLOG2
          0x2  : SlinkAttr(name='active_txs',   width=3,  rst='NUM_TX_LANES_CLOG2',       desc='Active TX lanes') ,
          0x3  : SlinkAttr(name='active_rxs',   width=3,  rst='NUM_RX_LANES_CLOG2',       desc='Active RX lanes') ,
          0x8  : SlinkAttr(name='hard_reset_us',width=10, rst=100,                        desc='Time (in us) at which a Hard Reset Condition is detected.') ,
-         0x10 : SlinkAttr(name='px_clk_trail', width=8,  rst=32,                         desc='Number of clock cycles to run the bitclk when going to a P state that doesn\'t supply the bitclk') ,
-         0x20 : SlinkAttr(name='p1_ts1_tx',    width=16, rst=32,                         desc='TS1s to send if exiting from P1'   ) ,
-         0x21 : SlinkAttr(name='p1_ts1_rx',    width=16, rst=32,                         desc='TS1s to receive if exiting from P1') ,
-         0x22 : SlinkAttr(name='p1_ts2_tx',    width=16, rst=4,                          desc='TS2s to send if exiting from P1'   ) ,
-         0x23 : SlinkAttr(name='p1_ts2_rx',    width=16, rst=4,                          desc='TS2s to receive if exiting from P1') ,
-         0x24 : SlinkAttr(name='p2_ts1_tx',    width=16, rst=64,                         desc='TS1s to send if exiting from P2'   ) ,
-         0x25 : SlinkAttr(name='p2_ts1_rx',    width=16, rst=64,                         desc='TS1s to receive if exiting from P2') ,
-         0x26 : SlinkAttr(name='p2_ts2_tx',    width=16, rst=8,                          desc='TS2s to send if exiting from P2'   ) ,
-         0x27 : SlinkAttr(name='p2_ts2_rx',    width=16, rst=8,                          desc='TS2s to receive if exiting from P2') ,
-         0x28 : SlinkAttr(name='p3r_ts1_tx',   width=16, rst=128,                        desc='TS1s to send if exiting from P3 or when coming out of reset'   ) ,
-         0x29 : SlinkAttr(name='p3r_ts1_rx',   width=16, rst=128,                        desc='TS1s to receive if exiting from P3 or when coming out of reset') ,
-         0x2a : SlinkAttr(name='p3r_ts2_tx',   width=16, rst=16,                         desc='TS2s to send if exiting from P3 or when coming out of reset'   ) ,
-         0x2b : SlinkAttr(name='p3r_ts2_rx',   width=16, rst=16,                         desc='TS2s to receive if exiting from P3 or when coming out of reset') ,
-         0x30 : SlinkAttr(name='sync_freq',    width=8,  rst=15,                         desc='How often SYNC Ordered Sets are sent during training') ,
+         0x10 : SlinkAttr(name='px_clk_trail', width=8,  rst='PX_CLK_TRAIL_RESET',       desc='Number of clock cycles to run the bitclk when going to a P state that doesn\'t supply the bitclk') ,
+         0x20 : SlinkAttr(name='p1_ts1_tx',    width=16, rst='P1_TS1_TX_RESET',          desc='TS1s to send if exiting from P1'   ) ,
+         0x21 : SlinkAttr(name='p1_ts1_rx',    width=16, rst='P1_TS1_RX_RESET',          desc='TS1s to receive if exiting from P1') ,
+         0x22 : SlinkAttr(name='p1_ts2_tx',    width=16, rst='P1_TS2_TX_RESET',          desc='TS2s to send if exiting from P1'   ) ,
+         0x23 : SlinkAttr(name='p1_ts2_rx',    width=16, rst='P1_TS2_RX_RESET',          desc='TS2s to receive if exiting from P1') ,
+         0x24 : SlinkAttr(name='p2_ts1_tx',    width=16, rst='P2_TS1_TX_RESET',          desc='TS1s to send if exiting from P2'   ) ,
+         0x25 : SlinkAttr(name='p2_ts1_rx',    width=16, rst='P2_TS1_RX_RESET',          desc='TS1s to receive if exiting from P2') ,
+         0x26 : SlinkAttr(name='p2_ts2_tx',    width=16, rst='P2_TS2_TX_RESET',          desc='TS2s to send if exiting from P2'   ) ,
+         0x27 : SlinkAttr(name='p2_ts2_rx',    width=16, rst='P2_TS2_RX_RESET',          desc='TS2s to receive if exiting from P2') ,
+         0x28 : SlinkAttr(name='p3r_ts1_tx',   width=16, rst='P3R_TS1_TX_RESET',         desc='TS1s to send if exiting from P3 or when coming out of reset'   ) ,
+         0x29 : SlinkAttr(name='p3r_ts1_rx',   width=16, rst='P3R_TS1_RX_RESET',         desc='TS1s to receive if exiting from P3 or when coming out of reset') ,
+         0x2a : SlinkAttr(name='p3r_ts2_tx',   width=16, rst='P3R_TS2_TX_RESET',         desc='TS2s to send if exiting from P3 or when coming out of reset'   ) ,
+         0x2b : SlinkAttr(name='p3r_ts2_rx',   width=16, rst='P3R_TS2_RX_RESET',         desc='TS2s to receive if exiting from P3 or when coming out of reset') ,
+         0x30 : SlinkAttr(name='sync_freq',    width=8,  rst='PX_CLK_TRAIL_RESET',       desc='How often SYNC Ordered Sets are sent during training') ,
        }
 
 # Print it

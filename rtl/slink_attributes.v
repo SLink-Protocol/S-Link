@@ -87,7 +87,24 @@ endmodule
 
 module slink_attributes #(
   parameter NUM_TX_LANES_CLOG2 = 2,
-  parameter NUM_RX_LANES_CLOG2 = 2
+  parameter NUM_RX_LANES_CLOG2 = 2,
+  parameter P1_TS1_TX_RESET    = 16, 
+  parameter P1_TS1_RX_RESET    = 16,  
+  parameter P1_TS2_TX_RESET    = 4,  
+  parameter P1_TS2_RX_RESET    = 4,  
+  
+  parameter P2_TS1_TX_RESET    = 32, 
+  parameter P2_TS1_RX_RESET    = 32, 
+  parameter P2_TS2_TX_RESET    = 8,  
+  parameter P2_TS2_RX_RESET    = 8,  
+  
+  parameter P3R_TS1_TX_RESET   = 32, 
+  parameter P3R_TS1_RX_RESET   = 32, 
+  parameter P3R_TS2_TX_RESET   = 8,  
+  parameter P3R_TS2_RX_RESET   = 8,  
+  parameter PX_CLK_TRAIL_RESET = 32,
+  
+  parameter SYNC_FREQ_RESET    = 15 
 )(
   //Attributes
   output wire [2:0]   attr_max_txs,
@@ -289,7 +306,7 @@ slink_attribute_base #(
   .ADDR                ( 'h10                     ),
   .NAME                ( "px_clk_trail"           ),
   .WIDTH               ( 8                        ),
-  .RESET_VAL           ( 32                       ),
+  .RESET_VAL           ( PX_CLK_TRAIL_RESET       ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_px_clk_trail (
   .clk                 ( clk                      ),     
@@ -319,7 +336,7 @@ slink_attribute_base #(
   .ADDR                ( 'h20                     ),
   .NAME                ( "p1_ts1_tx"              ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 32                       ),
+  .RESET_VAL           ( P1_TS1_TX_RESET          ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p1_ts1_tx (
   .clk                 ( clk                      ),     
@@ -349,7 +366,7 @@ slink_attribute_base #(
   .ADDR                ( 'h21                     ),
   .NAME                ( "p1_ts1_rx"              ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 32                       ),
+  .RESET_VAL           ( P1_TS1_RX_RESET          ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p1_ts1_rx (
   .clk                 ( clk                      ),     
@@ -379,7 +396,7 @@ slink_attribute_base #(
   .ADDR                ( 'h22                     ),
   .NAME                ( "p1_ts2_tx"              ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 4                        ),
+  .RESET_VAL           ( P1_TS2_TX_RESET          ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p1_ts2_tx (
   .clk                 ( clk                      ),     
@@ -409,7 +426,7 @@ slink_attribute_base #(
   .ADDR                ( 'h23                     ),
   .NAME                ( "p1_ts2_rx"              ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 4                        ),
+  .RESET_VAL           ( P1_TS2_RX_RESET          ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p1_ts2_rx (
   .clk                 ( clk                      ),     
@@ -439,7 +456,7 @@ slink_attribute_base #(
   .ADDR                ( 'h24                     ),
   .NAME                ( "p2_ts1_tx"              ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 64                       ),
+  .RESET_VAL           ( P2_TS1_TX_RESET          ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p2_ts1_tx (
   .clk                 ( clk                      ),     
@@ -469,7 +486,7 @@ slink_attribute_base #(
   .ADDR                ( 'h25                     ),
   .NAME                ( "p2_ts1_rx"              ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 64                       ),
+  .RESET_VAL           ( P2_TS1_RX_RESET          ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p2_ts1_rx (
   .clk                 ( clk                      ),     
@@ -499,7 +516,7 @@ slink_attribute_base #(
   .ADDR                ( 'h26                     ),
   .NAME                ( "p2_ts2_tx"              ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 8                        ),
+  .RESET_VAL           ( P2_TS2_TX_RESET          ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p2_ts2_tx (
   .clk                 ( clk                      ),     
@@ -529,7 +546,7 @@ slink_attribute_base #(
   .ADDR                ( 'h27                     ),
   .NAME                ( "p2_ts2_rx"              ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 8                        ),
+  .RESET_VAL           ( P2_TS2_RX_RESET          ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p2_ts2_rx (
   .clk                 ( clk                      ),     
@@ -559,7 +576,7 @@ slink_attribute_base #(
   .ADDR                ( 'h28                     ),
   .NAME                ( "p3r_ts1_tx"             ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 128                      ),
+  .RESET_VAL           ( P3R_TS1_TX_RESET         ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p3r_ts1_tx (
   .clk                 ( clk                      ),     
@@ -589,7 +606,7 @@ slink_attribute_base #(
   .ADDR                ( 'h29                     ),
   .NAME                ( "p3r_ts1_rx"             ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 128                      ),
+  .RESET_VAL           ( P3R_TS1_RX_RESET         ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p3r_ts1_rx (
   .clk                 ( clk                      ),     
@@ -619,7 +636,7 @@ slink_attribute_base #(
   .ADDR                ( 'h2a                     ),
   .NAME                ( "p3r_ts2_tx"             ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 16                       ),
+  .RESET_VAL           ( P3R_TS2_TX_RESET         ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p3r_ts2_tx (
   .clk                 ( clk                      ),     
@@ -649,7 +666,7 @@ slink_attribute_base #(
   .ADDR                ( 'h2b                     ),
   .NAME                ( "p3r_ts2_rx"             ),
   .WIDTH               ( 16                       ),
-  .RESET_VAL           ( 16                       ),
+  .RESET_VAL           ( P3R_TS2_RX_RESET         ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_p3r_ts2_rx (
   .clk                 ( clk                      ),     
@@ -679,7 +696,7 @@ slink_attribute_base #(
   .ADDR                ( 'h30                     ),
   .NAME                ( "sync_freq"              ),
   .WIDTH               ( 8                        ),
-  .RESET_VAL           ( 15                       ),
+  .RESET_VAL           ( PX_CLK_TRAIL_RESET       ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_sync_freq (
   .clk                 ( clk                      ),     

@@ -98,7 +98,9 @@ slink_b2b_tb_wrapper #(
   
   .SLV_TX_APP_DATA_WIDTH  ( SLV_TX_APP_DATA_WIDTH ),
   .SLV_RX_APP_DATA_WIDTH  ( SLV_RX_APP_DATA_WIDTH ),
-  .SLV_PHY_DATA_WIDTH     ( SLV_PHY_DATA_WIDTH    )
+  .SLV_PHY_DATA_WIDTH     ( SLV_PHY_DATA_WIDTH    ),
+  
+  .SERDES_MODE            ( SERDES_MODE           )
 ) u_slink_b2b_tb_wrapper (
   .main_reset              ( main_reset               ),  
   .mst_apb_clk             ( apb_clk                  ),  

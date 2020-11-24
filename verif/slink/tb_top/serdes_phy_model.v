@@ -9,7 +9,8 @@
  
 //--------------------------------------------
 module serdes_clk_model #(
-  parameter IS_MASTER = 1
+  parameter IS_MASTER   = 1,
+  parameter CLK_PER_NS  = 0.0625
 ) (
   input  wire   enable,
   input  wire   idle,
@@ -21,7 +22,7 @@ initial begin
   bitclk = 0;
 end
 
-always #0.0625ns bitclk <= enable && ~idle && IS_MASTER ? ~bitclk : 1'b0;
+always #((CLK_PER_NS/2.0)*1ns) bitclk <= enable && ~idle && IS_MASTER ? ~bitclk : 1'b0;
 
 always @(*) begin
   if(enable) begin

@@ -31,6 +31,10 @@
   `define SLV_RX_APP_DATA_WIDTH (`MAX_TX_LANES * `SLV_PHY_DATA_WIDTH)
 `endif
 
+`ifndef SERDES_MODE
+  `define SERDES_MODE 1
+`endif
+parameter SERDES_MODE             = `SERDES_MODE;
 
 parameter MST_TX_APP_DATA_WIDTH   = `MST_TX_APP_DATA_WIDTH;
 parameter MST_RX_APP_DATA_WIDTH   = `MST_RX_APP_DATA_WIDTH;
