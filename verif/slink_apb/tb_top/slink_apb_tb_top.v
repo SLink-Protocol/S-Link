@@ -166,6 +166,45 @@ slink_apb_ini #(
   .rx_crc_corrupted  ( slv_rx_crc_corrupted   )); //input -  1        
 
 
+reg serial_clk = 0;
+always #1ns serial_clk <= ~serial_clk;
+reg tx_en = 0;
+reg [7:0] tx_par_data = 8'h12;
+reg serial_load_sel = 0;
+
+initial begin
+  #10ns;
+  tx_en = 1;
+  
+  #10ns;
+  repeat(10) begin
+    tx_par_data = $random;
+    serial_load_sel = 0;
+    repeat(14) begin
+      @(posedge serial_clk);
+    end
+    @(posedge serial_clk);
+    serial_load_sel = 1;
+    @(posedge serial_clk);
+  end
+  
+end
+
+slink_gpio_serializer #(
+  //parameters
+  .PAR_DATA_WIDTH     ( 8         ),
+  .IO_DATA_WIDTH      ( 2         )
+) u_slink_gpio_serializer (
+  .serial_clk    ( serial_clk     ),  //input -  1              
+  .serial_reset  ( main_reset     ),  //input -  1       
+  .serial_load_sel(serial_load_sel),       
+  .tx_en         ( tx_en          ),  //input -  1              
+  .tx_ready      (                ),  //output - 1              
+  .tx_par_data   ( tx_par_data    ),  //input -  [PAR_DATA_WIDTH-1:0]              
+  .tx_ser_io_en  (                ),  //output - 1              
+  .tx_ser_data   (                )); //output - [IO_DATA_WIDTH-1:0]  
+
+
 bit [31:0] val;
 initial begin  
   #1ps;
