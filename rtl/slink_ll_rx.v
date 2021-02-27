@@ -10,6 +10,8 @@ module slink_ll_rx #(
   input  wire                               reset,
   input  wire                               enable,
   
+  input  wire [7:0]                         swi_short_packet_max,
+  
   //Interface to App
   output reg                                sop,
   output wire [7:0]                         data_id,
@@ -148,8 +150,8 @@ assign delim_adv                  = delim_count == 'd0;//delim_count_in == delim
 
 assign ll_rx_state                = state;
 
-assign short_pkt_check            = link_data[7:0]    <= 'h1f;
-assign short_pkt_check_corrected  = corrected_ph[7:0] <= 'h1f;
+assign short_pkt_check            = link_data[7:0]    <= swi_short_packet_max;
+assign short_pkt_check_corrected  = corrected_ph[7:0] <= swi_short_packet_max;
 
 assign block_app_for_ecc_error    = ecc_corrupted || (ecc_corrected && ~swi_allow_ecc_corrected);
 assign ecc_corrected_cond         = ecc_corrected && swi_allow_ecc_corrected;

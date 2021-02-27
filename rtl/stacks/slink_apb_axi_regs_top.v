@@ -1,6 +1,6 @@
 //===================================================================
 //
-// Created by sbridges on January/04/2021 at 15:54:32
+// Created by sbridges on February/02/2021 at 14:25:43
 //
 // slink_apb_axi_regs_top.v
 //
@@ -30,6 +30,26 @@ module slink_apb_axi_regs_top #(
   output wire         w1c_out_int_nack_seen,
   input  wire         w1c_in_int_nack_sent,
   output wire         w1c_out_int_nack_sent,
+  input  wire         w1c_in_axi_aw_nack_seen,
+  output wire         w1c_out_axi_aw_nack_seen,
+  input  wire         w1c_in_axi_aw_nack_sent,
+  output wire         w1c_out_axi_aw_nack_sent,
+  input  wire         w1c_in_axi_w_nack_seen,
+  output wire         w1c_out_axi_w_nack_seen,
+  input  wire         w1c_in_axi_w_nack_sent,
+  output wire         w1c_out_axi_w_nack_sent,
+  input  wire         w1c_in_axi_b_nack_seen,
+  output wire         w1c_out_axi_b_nack_seen,
+  input  wire         w1c_in_axi_b_nack_sent,
+  output wire         w1c_out_axi_b_nack_sent,
+  input  wire         w1c_in_axi_ar_nack_seen,
+  output wire         w1c_out_axi_ar_nack_seen,
+  input  wire         w1c_in_axi_ar_nack_sent,
+  output wire         w1c_out_axi_ar_nack_sent,
+  input  wire         w1c_in_axi_r_nack_seen,
+  output wire         w1c_out_axi_r_nack_seen,
+  input  wire         w1c_in_axi_r_nack_sent,
+  output wire         w1c_out_axi_r_nack_sent,
   //PSTATE_CONTROL
   output wire [7:0]   swi_tick_1us,
   output wire [7:0]   swi_inactivity_count,
@@ -48,6 +68,14 @@ module slink_apb_axi_regs_top #(
   //INT_APP_PKT_ID_WC
   output wire [7:0]   swi_int_data_id,
   output wire [15:0]  swi_int_word_count,
+  //INT_OVERRIDES
+  input  wire [23:0]  int_override,
+  output wire [23:0]  swi_int_override_muxed,
+  //GPIO_OVERRIDES
+  input  wire [7:0]   gpio_override,
+  output wire [7:0]   swi_gpio_override_muxed,
+  //INT_GPIO_ENABLE
+  output wire [31:0]  swi_int_gpio_enable,
   //DEBUG_BUS_STATUS
   output reg  [31:0]  debug_bus_ctrl_status,
 
@@ -122,6 +150,8 @@ module slink_apb_axi_regs_top #(
   reg  reg_apb_app_enable_mux;
   reg  reg_axi_app_enable_mux;
   reg  reg_int_app_enable_mux;
+  reg  reg_int_override_mux;
+  reg  reg_gpio_override_mux;
 
 
 
@@ -254,6 +284,16 @@ module slink_apb_axi_regs_top #(
   // apb_nack_sent - APB Nack has been sent from this application layer (near-end saw an issue)
   // int_nack_seen - INT Nack has been seen on this application layer (far-end saw an issue)
   // int_nack_sent - INT Nack has been sent from this application layer (near-end saw an issue)
+  // axi_aw_nack_seen - AXI AW Channel Nack has been seen on this application layer (far-end saw an issue)
+  // axi_aw_nack_sent - AXI AW Channel Nack has been sent from this application layer (near-end saw an issue)
+  // axi_w_nack_seen - AXI W  Channel Nack has been seen on this application layer (far-end saw an issue)
+  // axi_w_nack_sent - AXI W  Channel Nack has been sent from this application layer (near-end saw an issue)
+  // axi_b_nack_seen - AXI B  Channel Nack has been seen on this application layer (far-end saw an issue)
+  // axi_b_nack_sent - AXI B  Channel Nack has been sent from this application layer (near-end saw an issue)
+  // axi_ar_nack_seen - AXI AR Channel Nack has been seen on this application layer (far-end saw an issue)
+  // axi_ar_nack_sent - AXI AR Channel Nack has been sent from this application layer (near-end saw an issue)
+  // axi_r_nack_seen - AXI R  Channel Nack has been seen on this application layer (far-end saw an issue)
+  // axi_r_nack_sent - AXI R  Channel Nack has been sent from this application layer (near-end saw an issue)
   //---------------------------
   wire [31:0] INTERRUPT_STATUS_reg_read;
   reg          reg_w1c_apb_nack_seen;
@@ -268,6 +308,36 @@ module slink_apb_axi_regs_top #(
   reg          reg_w1c_int_nack_sent;
   wire         reg_w1c_in_int_nack_sent_ff2;
   reg          reg_w1c_in_int_nack_sent_ff3;
+  reg          reg_w1c_axi_aw_nack_seen;
+  wire         reg_w1c_in_axi_aw_nack_seen_ff2;
+  reg          reg_w1c_in_axi_aw_nack_seen_ff3;
+  reg          reg_w1c_axi_aw_nack_sent;
+  wire         reg_w1c_in_axi_aw_nack_sent_ff2;
+  reg          reg_w1c_in_axi_aw_nack_sent_ff3;
+  reg          reg_w1c_axi_w_nack_seen;
+  wire         reg_w1c_in_axi_w_nack_seen_ff2;
+  reg          reg_w1c_in_axi_w_nack_seen_ff3;
+  reg          reg_w1c_axi_w_nack_sent;
+  wire         reg_w1c_in_axi_w_nack_sent_ff2;
+  reg          reg_w1c_in_axi_w_nack_sent_ff3;
+  reg          reg_w1c_axi_b_nack_seen;
+  wire         reg_w1c_in_axi_b_nack_seen_ff2;
+  reg          reg_w1c_in_axi_b_nack_seen_ff3;
+  reg          reg_w1c_axi_b_nack_sent;
+  wire         reg_w1c_in_axi_b_nack_sent_ff2;
+  reg          reg_w1c_in_axi_b_nack_sent_ff3;
+  reg          reg_w1c_axi_ar_nack_seen;
+  wire         reg_w1c_in_axi_ar_nack_seen_ff2;
+  reg          reg_w1c_in_axi_ar_nack_seen_ff3;
+  reg          reg_w1c_axi_ar_nack_sent;
+  wire         reg_w1c_in_axi_ar_nack_sent_ff2;
+  reg          reg_w1c_in_axi_ar_nack_sent_ff3;
+  reg          reg_w1c_axi_r_nack_seen;
+  wire         reg_w1c_in_axi_r_nack_seen_ff2;
+  reg          reg_w1c_in_axi_r_nack_seen_ff3;
+  reg          reg_w1c_axi_r_nack_sent;
+  wire         reg_w1c_in_axi_r_nack_sent_ff2;
+  reg          reg_w1c_in_axi_r_nack_sent_ff3;
 
   // apb_nack_seen W1C Logic
   always @(posedge RegClk or posedge RegReset) begin
@@ -340,7 +410,197 @@ module slink_apb_axi_regs_top #(
     .sig_in  ( w1c_in_int_nack_sent                       ),            
     .sig_out ( reg_w1c_in_int_nack_sent_ff2               )); 
 
-  assign INTERRUPT_STATUS_reg_read = {28'h0,
+
+  // axi_aw_nack_seen W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_aw_nack_seen                  <= 1'h0;
+      reg_w1c_in_axi_aw_nack_seen_ff3           <= 1'h0;
+    end else begin
+      reg_w1c_axi_aw_nack_seen                  <= RegWrData[4] && reg_w1c_axi_aw_nack_seen && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_aw_nack_seen_ff2 & ~reg_w1c_in_axi_aw_nack_seen_ff3 ? 1'b1 : reg_w1c_axi_aw_nack_seen);
+      reg_w1c_in_axi_aw_nack_seen_ff3           <= reg_w1c_in_axi_aw_nack_seen_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_aw_nack_seen (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_aw_nack_seen                    ),            
+    .sig_out ( reg_w1c_in_axi_aw_nack_seen_ff2            )); 
+
+
+  // axi_aw_nack_sent W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_aw_nack_sent                  <= 1'h0;
+      reg_w1c_in_axi_aw_nack_sent_ff3           <= 1'h0;
+    end else begin
+      reg_w1c_axi_aw_nack_sent                  <= RegWrData[5] && reg_w1c_axi_aw_nack_sent && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_aw_nack_sent_ff2 & ~reg_w1c_in_axi_aw_nack_sent_ff3 ? 1'b1 : reg_w1c_axi_aw_nack_sent);
+      reg_w1c_in_axi_aw_nack_sent_ff3           <= reg_w1c_in_axi_aw_nack_sent_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_aw_nack_sent (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_aw_nack_sent                    ),            
+    .sig_out ( reg_w1c_in_axi_aw_nack_sent_ff2            )); 
+
+
+  // axi_w_nack_seen W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_w_nack_seen                   <= 1'h0;
+      reg_w1c_in_axi_w_nack_seen_ff3            <= 1'h0;
+    end else begin
+      reg_w1c_axi_w_nack_seen                   <= RegWrData[6] && reg_w1c_axi_w_nack_seen && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_w_nack_seen_ff2 & ~reg_w1c_in_axi_w_nack_seen_ff3 ? 1'b1 : reg_w1c_axi_w_nack_seen);
+      reg_w1c_in_axi_w_nack_seen_ff3            <= reg_w1c_in_axi_w_nack_seen_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_w_nack_seen (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_w_nack_seen                     ),            
+    .sig_out ( reg_w1c_in_axi_w_nack_seen_ff2             )); 
+
+
+  // axi_w_nack_sent W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_w_nack_sent                   <= 1'h0;
+      reg_w1c_in_axi_w_nack_sent_ff3            <= 1'h0;
+    end else begin
+      reg_w1c_axi_w_nack_sent                   <= RegWrData[7] && reg_w1c_axi_w_nack_sent && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_w_nack_sent_ff2 & ~reg_w1c_in_axi_w_nack_sent_ff3 ? 1'b1 : reg_w1c_axi_w_nack_sent);
+      reg_w1c_in_axi_w_nack_sent_ff3            <= reg_w1c_in_axi_w_nack_sent_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_w_nack_sent (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_w_nack_sent                     ),            
+    .sig_out ( reg_w1c_in_axi_w_nack_sent_ff2             )); 
+
+
+  // axi_b_nack_seen W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_b_nack_seen                   <= 1'h0;
+      reg_w1c_in_axi_b_nack_seen_ff3            <= 1'h0;
+    end else begin
+      reg_w1c_axi_b_nack_seen                   <= RegWrData[8] && reg_w1c_axi_b_nack_seen && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_b_nack_seen_ff2 & ~reg_w1c_in_axi_b_nack_seen_ff3 ? 1'b1 : reg_w1c_axi_b_nack_seen);
+      reg_w1c_in_axi_b_nack_seen_ff3            <= reg_w1c_in_axi_b_nack_seen_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_b_nack_seen (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_b_nack_seen                     ),            
+    .sig_out ( reg_w1c_in_axi_b_nack_seen_ff2             )); 
+
+
+  // axi_b_nack_sent W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_b_nack_sent                   <= 1'h0;
+      reg_w1c_in_axi_b_nack_sent_ff3            <= 1'h0;
+    end else begin
+      reg_w1c_axi_b_nack_sent                   <= RegWrData[9] && reg_w1c_axi_b_nack_sent && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_b_nack_sent_ff2 & ~reg_w1c_in_axi_b_nack_sent_ff3 ? 1'b1 : reg_w1c_axi_b_nack_sent);
+      reg_w1c_in_axi_b_nack_sent_ff3            <= reg_w1c_in_axi_b_nack_sent_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_b_nack_sent (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_b_nack_sent                     ),            
+    .sig_out ( reg_w1c_in_axi_b_nack_sent_ff2             )); 
+
+
+  // axi_ar_nack_seen W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_ar_nack_seen                  <= 1'h0;
+      reg_w1c_in_axi_ar_nack_seen_ff3           <= 1'h0;
+    end else begin
+      reg_w1c_axi_ar_nack_seen                  <= RegWrData[10] && reg_w1c_axi_ar_nack_seen && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_ar_nack_seen_ff2 & ~reg_w1c_in_axi_ar_nack_seen_ff3 ? 1'b1 : reg_w1c_axi_ar_nack_seen);
+      reg_w1c_in_axi_ar_nack_seen_ff3           <= reg_w1c_in_axi_ar_nack_seen_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_ar_nack_seen (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_ar_nack_seen                    ),            
+    .sig_out ( reg_w1c_in_axi_ar_nack_seen_ff2            )); 
+
+
+  // axi_ar_nack_sent W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_ar_nack_sent                  <= 1'h0;
+      reg_w1c_in_axi_ar_nack_sent_ff3           <= 1'h0;
+    end else begin
+      reg_w1c_axi_ar_nack_sent                  <= RegWrData[11] && reg_w1c_axi_ar_nack_sent && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_ar_nack_sent_ff2 & ~reg_w1c_in_axi_ar_nack_sent_ff3 ? 1'b1 : reg_w1c_axi_ar_nack_sent);
+      reg_w1c_in_axi_ar_nack_sent_ff3           <= reg_w1c_in_axi_ar_nack_sent_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_ar_nack_sent (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_ar_nack_sent                    ),            
+    .sig_out ( reg_w1c_in_axi_ar_nack_sent_ff2            )); 
+
+
+  // axi_r_nack_seen W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_r_nack_seen                   <= 1'h0;
+      reg_w1c_in_axi_r_nack_seen_ff3            <= 1'h0;
+    end else begin
+      reg_w1c_axi_r_nack_seen                   <= RegWrData[12] && reg_w1c_axi_r_nack_seen && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_r_nack_seen_ff2 & ~reg_w1c_in_axi_r_nack_seen_ff3 ? 1'b1 : reg_w1c_axi_r_nack_seen);
+      reg_w1c_in_axi_r_nack_seen_ff3            <= reg_w1c_in_axi_r_nack_seen_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_r_nack_seen (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_r_nack_seen                     ),            
+    .sig_out ( reg_w1c_in_axi_r_nack_seen_ff2             )); 
+
+
+  // axi_r_nack_sent W1C Logic
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_w1c_axi_r_nack_sent                   <= 1'h0;
+      reg_w1c_in_axi_r_nack_sent_ff3            <= 1'h0;
+    end else begin
+      reg_w1c_axi_r_nack_sent                   <= RegWrData[13] && reg_w1c_axi_r_nack_sent && (RegAddr == 'hc) && RegWrEn ? 1'b0 : (reg_w1c_in_axi_r_nack_sent_ff2 & ~reg_w1c_in_axi_r_nack_sent_ff3 ? 1'b1 : reg_w1c_axi_r_nack_sent);
+      reg_w1c_in_axi_r_nack_sent_ff3            <= reg_w1c_in_axi_r_nack_sent_ff2;
+    end
+  end
+
+  slink_demet_reset u_slink_demet_reset_axi_r_nack_sent (
+    .clk     ( RegClk                                     ),              
+    .reset   ( RegReset                                   ),              
+    .sig_in  ( w1c_in_axi_r_nack_sent                     ),            
+    .sig_out ( reg_w1c_in_axi_r_nack_sent_ff2             )); 
+
+  assign INTERRUPT_STATUS_reg_read = {18'h0,
+          reg_w1c_axi_r_nack_sent,
+          reg_w1c_axi_r_nack_seen,
+          reg_w1c_axi_ar_nack_sent,
+          reg_w1c_axi_ar_nack_seen,
+          reg_w1c_axi_b_nack_sent,
+          reg_w1c_axi_b_nack_seen,
+          reg_w1c_axi_w_nack_sent,
+          reg_w1c_axi_w_nack_seen,
+          reg_w1c_axi_aw_nack_sent,
+          reg_w1c_axi_aw_nack_seen,
           reg_w1c_int_nack_sent,
           reg_w1c_int_nack_seen,
           reg_w1c_apb_nack_sent,
@@ -354,6 +614,26 @@ module slink_apb_axi_regs_top #(
   assign w1c_out_int_nack_seen = reg_w1c_int_nack_seen;
   //-----------------------
   assign w1c_out_int_nack_sent = reg_w1c_int_nack_sent;
+  //-----------------------
+  assign w1c_out_axi_aw_nack_seen = reg_w1c_axi_aw_nack_seen;
+  //-----------------------
+  assign w1c_out_axi_aw_nack_sent = reg_w1c_axi_aw_nack_sent;
+  //-----------------------
+  assign w1c_out_axi_w_nack_seen = reg_w1c_axi_w_nack_seen;
+  //-----------------------
+  assign w1c_out_axi_w_nack_sent = reg_w1c_axi_w_nack_sent;
+  //-----------------------
+  assign w1c_out_axi_b_nack_seen = reg_w1c_axi_b_nack_seen;
+  //-----------------------
+  assign w1c_out_axi_b_nack_sent = reg_w1c_axi_b_nack_sent;
+  //-----------------------
+  assign w1c_out_axi_ar_nack_seen = reg_w1c_axi_ar_nack_seen;
+  //-----------------------
+  assign w1c_out_axi_ar_nack_sent = reg_w1c_axi_ar_nack_sent;
+  //-----------------------
+  assign w1c_out_axi_r_nack_seen = reg_w1c_axi_r_nack_seen;
+  //-----------------------
+  assign w1c_out_axi_r_nack_sent = reg_w1c_axi_r_nack_sent;
 
 
 
@@ -427,10 +707,10 @@ module slink_apb_axi_regs_top #(
 
   always @(posedge RegClk or posedge RegReset) begin
     if(RegReset) begin
-      reg_apb_cr_id                          <= 8'h20;
-      reg_apb_crack_id                       <= 8'h21;
-      reg_apb_ack_id                         <= 8'h22;
-      reg_apb_nack_id                        <= 8'h23;
+      reg_apb_cr_id                          <= 8'h8;
+      reg_apb_crack_id                       <= 8'h9;
+      reg_apb_ack_id                         <= 8'ha;
+      reg_apb_nack_id                        <= 8'hb;
     end else if(RegAddr == 'h14 && RegWrEn) begin
       reg_apb_cr_id                          <= RegWrData[7:0];
       reg_apb_crack_id                       <= RegWrData[15:8];
@@ -480,10 +760,10 @@ module slink_apb_axi_regs_top #(
 
   always @(posedge RegClk or posedge RegReset) begin
     if(RegReset) begin
-      reg_int_cr_id                          <= 8'h30;
-      reg_int_crack_id                       <= 8'h31;
-      reg_int_ack_id                         <= 8'h32;
-      reg_int_nack_id                        <= 8'h33;
+      reg_int_cr_id                          <= 8'hc;
+      reg_int_crack_id                       <= 8'hd;
+      reg_int_ack_id                         <= 8'he;
+      reg_int_nack_id                        <= 8'hf;
     end else if(RegAddr == 'h18 && RegWrEn) begin
       reg_int_cr_id                          <= RegWrData[7:0];
       reg_int_crack_id                       <= RegWrData[15:8];
@@ -529,7 +809,7 @@ module slink_apb_axi_regs_top #(
 
   always @(posedge RegClk or posedge RegReset) begin
     if(RegReset) begin
-      reg_int_data_id                        <= 8'h34;
+      reg_int_data_id                        <= 8'h50;
       reg_int_word_count                     <= 16'h3;
     end else if(RegAddr == 'h1c && RegWrEn) begin
       reg_int_data_id                        <= RegWrData[7:0];
@@ -555,24 +835,132 @@ module slink_apb_axi_regs_top #(
 
 
   //---------------------------
+  // INT_OVERRIDES
+  // int_override - 
+  // int_override_mux - 
+  //---------------------------
+  wire [31:0] INT_OVERRIDES_reg_read;
+  reg  [23:0]  reg_int_override;
+
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_int_override                       <= 24'h0;
+      reg_int_override_mux                   <= 1'h0;
+    end else if(RegAddr == 'h20 && RegWrEn) begin
+      reg_int_override                       <= RegWrData[23:0];
+      reg_int_override_mux                   <= RegWrData[24];
+    end else begin
+      reg_int_override                       <= reg_int_override;
+      reg_int_override_mux                   <= reg_int_override_mux;
+    end
+  end
+
+  assign INT_OVERRIDES_reg_read = {7'h0,
+          reg_int_override_mux,
+          reg_int_override};
+
+  //-----------------------
+
+  wire [23:0] swi_int_override_muxed_pre;
+  slink_clock_mux u_slink_clock_mux_int_override[23:0] (
+    .clk0    ( int_override                       ),              
+    .clk1    ( reg_int_override                   ),              
+    .sel     ( reg_int_override_mux               ),      
+    .clk_out ( swi_int_override_muxed_pre         )); 
+
+  assign swi_int_override_muxed = swi_int_override_muxed_pre;
+
+  //-----------------------
+
+
+
+
+  //---------------------------
+  // GPIO_OVERRIDES
+  // gpio_override - 
+  // gpio_override_mux - 
+  //---------------------------
+  wire [31:0] GPIO_OVERRIDES_reg_read;
+  reg  [7:0]   reg_gpio_override;
+
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_gpio_override                      <= 8'h0;
+      reg_gpio_override_mux                  <= 1'h0;
+    end else if(RegAddr == 'h24 && RegWrEn) begin
+      reg_gpio_override                      <= RegWrData[7:0];
+      reg_gpio_override_mux                  <= RegWrData[8];
+    end else begin
+      reg_gpio_override                      <= reg_gpio_override;
+      reg_gpio_override_mux                  <= reg_gpio_override_mux;
+    end
+  end
+
+  assign GPIO_OVERRIDES_reg_read = {23'h0,
+          reg_gpio_override_mux,
+          reg_gpio_override};
+
+  //-----------------------
+
+  wire [7:0]  swi_gpio_override_muxed_pre;
+  slink_clock_mux u_slink_clock_mux_gpio_override[7:0] (
+    .clk0    ( gpio_override                      ),              
+    .clk1    ( reg_gpio_override                  ),              
+    .sel     ( reg_gpio_override_mux              ),      
+    .clk_out ( swi_gpio_override_muxed_pre        )); 
+
+  assign swi_gpio_override_muxed = swi_gpio_override_muxed_pre;
+
+  //-----------------------
+
+
+
+
+  //---------------------------
+  // INT_GPIO_ENABLE
+  // int_gpio_enable - Allows user to gate the Interrupts/GPIO signals in the event of a spurrious signal
+  //---------------------------
+  wire [31:0] INT_GPIO_ENABLE_reg_read;
+  reg [31:0]  reg_int_gpio_enable;
+
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_int_gpio_enable                    <= 32'hffffffff;
+    end else if(RegAddr == 'h28 && RegWrEn) begin
+      reg_int_gpio_enable                    <= RegWrData[31:0];
+    end else begin
+      reg_int_gpio_enable                    <= reg_int_gpio_enable;
+    end
+  end
+
+  assign INT_GPIO_ENABLE_reg_read = {          reg_int_gpio_enable};
+
+  //-----------------------
+  assign swi_int_gpio_enable = reg_int_gpio_enable;
+
+
+
+
+
+  //---------------------------
   // DEBUG_BUS_CTRL
   // DEBUG_BUS_CTRL_SEL - Select signal for DEBUG_BUS_CTRL
   //---------------------------
   wire [31:0] DEBUG_BUS_CTRL_reg_read;
-  reg [1:0]   reg_debug_bus_ctrl_sel;
-  wire [1:0]   swi_debug_bus_ctrl_sel;
+  reg [2:0]   reg_debug_bus_ctrl_sel;
+  wire [2:0]   swi_debug_bus_ctrl_sel;
 
   always @(posedge RegClk or posedge RegReset) begin
     if(RegReset) begin
-      reg_debug_bus_ctrl_sel                 <= 2'h0;
-    end else if(RegAddr == 'h20 && RegWrEn) begin
-      reg_debug_bus_ctrl_sel                 <= RegWrData[1:0];
+      reg_debug_bus_ctrl_sel                 <= 3'h0;
+    end else if(RegAddr == 'h2c && RegWrEn) begin
+      reg_debug_bus_ctrl_sel                 <= RegWrData[2:0];
     end else begin
       reg_debug_bus_ctrl_sel                 <= reg_debug_bus_ctrl_sel;
     end
   end
 
-  assign DEBUG_BUS_CTRL_reg_read = {30'h0,
+  assign DEBUG_BUS_CTRL_reg_read = {29'h0,
           reg_debug_bus_ctrl_sel};
 
   //-----------------------
@@ -594,6 +982,8 @@ module slink_apb_axi_regs_top #(
       'd0 : debug_bus_ctrl_status = {31'd0, swi_apb_app_enable_muxed};
       'd1 : debug_bus_ctrl_status = {31'd0, swi_axi_app_enable_muxed};
       'd2 : debug_bus_ctrl_status = {31'd0, swi_int_app_enable_muxed};
+      'd3 : debug_bus_ctrl_status = {8'd0, swi_int_override_muxed};
+      'd4 : debug_bus_ctrl_status = {24'd0, swi_gpio_override_muxed};
       default : debug_bus_ctrl_status = 32'd0;
     endcase
   end 
@@ -620,8 +1010,11 @@ module slink_apb_axi_regs_top #(
       'h14   : prdata_sel = APB_APP_CREDIT_IDS_reg_read;
       'h18   : prdata_sel = INT_APP_CREDIT_IDS_reg_read;
       'h1c   : prdata_sel = INT_APP_PKT_ID_WC_reg_read;
-      'h20   : prdata_sel = DEBUG_BUS_CTRL_reg_read;
-      'h24   : prdata_sel = DEBUG_BUS_STATUS_reg_read;
+      'h20   : prdata_sel = INT_OVERRIDES_reg_read;
+      'h24   : prdata_sel = GPIO_OVERRIDES_reg_read;
+      'h28   : prdata_sel = INT_GPIO_ENABLE_reg_read;
+      'h2c   : prdata_sel = DEBUG_BUS_CTRL_reg_read;
+      'h30   : prdata_sel = DEBUG_BUS_STATUS_reg_read;
 
       default : prdata_sel = 32'd0;
     endcase
@@ -649,6 +1042,9 @@ module slink_apb_axi_regs_top #(
       'h1c   : pslverr_pre = 1'b0;
       'h20   : pslverr_pre = 1'b0;
       'h24   : pslverr_pre = 1'b0;
+      'h28   : pslverr_pre = 1'b0;
+      'h2c   : pslverr_pre = 1'b0;
+      'h30   : pslverr_pre = 1'b0;
 
       default : pslverr_pre = 1'b1;
     endcase

@@ -108,7 +108,7 @@ module slink_axi_top #(
 
   
   //--------------------------------------
-  // Controls
+  // Controls / Status
   //--------------------------------------
   input  wire                           enable,
   
@@ -141,6 +141,11 @@ module slink_axi_top #(
   input  wire [7:0]                     swi_r_ack_id,
   input  wire [7:0]                     swi_r_nack_id,
   input  wire [7:0]                     swi_r_data_id,
+  
+  output wire [4:0]                     nack_sent,
+  output wire [4:0]                     nack_seen,
+  output wire [4:0]                     tx_fifo_empty,
+  output wire [4:0]                     rx_fifo_empty,
   
   //--------------------------------------
   // Link Layer
@@ -265,12 +270,12 @@ slink_generic_fc_sm #(
   .l2a_valid           ( aw_l2a_valid         ),  
   .l2a_accept          ( aw_l2a_accept        ),  
   .l2a_data            ( aw_l2a_data          ),  
-  .tx_fifo_empty       (                      ),  //output - 1              
-  .rx_fifo_empty       (                      ),  //output - 1              
+  .tx_fifo_empty       ( tx_fifo_empty[0]     ),  
+  .rx_fifo_empty       ( rx_fifo_empty[0]     ),  
   .link_clk            ( link_clk             ),          
   .link_reset          ( link_reset           ),          
-  .nack_sent           (                      ),  //output - 1              
-  .nack_seen           (                      ),  //output - 1              
+  .nack_sent           ( nack_sent[0]         ),              
+  .nack_seen           ( nack_seen[0]         ),              
   .tx_sop              ( aw_tx_sop            ),  
   .tx_data_id          ( aw_tx_data_id        ),  
   .tx_word_count       ( aw_tx_word_count     ),  
@@ -351,12 +356,12 @@ slink_generic_fc_sm #(
   .l2a_valid           ( w_l2a_valid          ),  
   .l2a_accept          ( w_l2a_accept         ),  
   .l2a_data            ( w_l2a_data           ),  
-  .tx_fifo_empty       (                      ),  //output - 1              
-  .rx_fifo_empty       (                      ),  //output - 1              
+  .tx_fifo_empty       ( tx_fifo_empty[1]     ),  
+  .rx_fifo_empty       ( rx_fifo_empty[1]     ),  
   .link_clk            ( link_clk             ),          
   .link_reset          ( link_reset           ),          
-  .nack_sent           (                      ),  //output - 1              
-  .nack_seen           (                      ),  //output - 1              
+  .nack_sent           ( nack_sent[1]         ),              
+  .nack_seen           ( nack_seen[1]         ),               
   .tx_sop              ( w_tx_sop             ),  
   .tx_data_id          ( w_tx_data_id         ),  
   .tx_word_count       ( w_tx_word_count      ),  
@@ -433,12 +438,12 @@ slink_generic_fc_sm #(
   .l2a_valid           ( b_l2a_valid          ),  
   .l2a_accept          ( b_l2a_accept         ),  
   .l2a_data            ( b_l2a_data           ),  
-  .tx_fifo_empty       (                      ),  //output - 1              
-  .rx_fifo_empty       (                      ),  //output - 1              
+  .tx_fifo_empty       ( tx_fifo_empty[2]     ),  
+  .rx_fifo_empty       ( rx_fifo_empty[2]     ),  
   .link_clk            ( link_clk             ),          
   .link_reset          ( link_reset           ),          
-  .nack_sent           (                      ),  //output - 1              
-  .nack_seen           (                      ),  //output - 1              
+  .nack_sent           ( nack_sent[2]         ),              
+  .nack_seen           ( nack_seen[2]         ),              
   .tx_sop              ( b_tx_sop             ),  
   .tx_data_id          ( b_tx_data_id         ),  
   .tx_word_count       ( b_tx_word_count      ),  
@@ -532,12 +537,12 @@ slink_generic_fc_sm #(
   .l2a_valid           ( ar_l2a_valid         ),  
   .l2a_accept          ( ar_l2a_accept        ),  
   .l2a_data            ( ar_l2a_data          ),  
-  .tx_fifo_empty       (                      ),  //output - 1              
-  .rx_fifo_empty       (                      ),  //output - 1              
+  .tx_fifo_empty       ( tx_fifo_empty[3]     ),  
+  .rx_fifo_empty       ( rx_fifo_empty[3]     ),  
   .link_clk            ( link_clk             ),          
   .link_reset          ( link_reset           ),          
-  .nack_sent           (                      ),  //output - 1              
-  .nack_seen           (                      ),  //output - 1              
+  .nack_sent           ( nack_sent[3]         ),              
+  .nack_seen           ( nack_seen[3]         ),              
   .tx_sop              ( ar_tx_sop            ),  
   .tx_data_id          ( ar_tx_data_id        ),  
   .tx_word_count       ( ar_tx_word_count     ),  
@@ -618,12 +623,12 @@ slink_generic_fc_sm #(
   .l2a_valid           ( r_l2a_valid          ),  
   .l2a_accept          ( r_l2a_accept         ),  
   .l2a_data            ( r_l2a_data           ),  
-  .tx_fifo_empty       (                      ),  //output - 1              
-  .rx_fifo_empty       (                      ),  //output - 1              
+  .tx_fifo_empty       ( tx_fifo_empty[4]     ),  
+  .rx_fifo_empty       ( rx_fifo_empty[4]     ),  
   .link_clk            ( link_clk             ),          
   .link_reset          ( link_reset           ),          
-  .nack_sent           (                      ),  //output - 1              
-  .nack_seen           (                      ),  //output - 1              
+  .nack_sent           ( nack_sent[4]         ),              
+  .nack_seen           ( nack_seen[4]         ),               
   .tx_sop              ( r_tx_sop             ),  
   .tx_data_id          ( r_tx_data_id         ),  
   .tx_word_count       ( r_tx_word_count      ),  
@@ -682,7 +687,7 @@ slink_generic_tx_router #(
   .tx_app_data         ( tx_app_data          ),       
   .tx_advance          ( tx_advance           )); 
 
-
+//I need to fix this 
 slink_generic_rx_router #(
   //parameters
   .NUM_CHANNELS       ( 5                 ),
@@ -696,13 +701,21 @@ slink_generic_rx_router #(
   .rx_app_data         ( rx_app_data          ),       
   .rx_valid            ( rx_valid             ),  
   .rx_crc_corrupted    ( rx_crc_corrupted     ),  
-  .swi_ch_sp_min       ( {5{8'h10}}           ),  //input -  [(NUM_CHANNELS*8)-1:0]              
-  .swi_ch_sp_max       ( {5{8'h10}}           ),  //input -  [(NUM_CHANNELS*8)-1:0]              
-  .swi_ch_lp_min       ( {swi_r_cr_id,
+  .swi_ch_sp_min       ( {swi_r_cr_id,
                           swi_ar_cr_id,
                           swi_b_cr_id,
                           swi_w_cr_id,
                           swi_aw_cr_id}       ),  //input -  [(NUM_CHANNELS*8)-1:0]              
+  .swi_ch_sp_max       ( {swi_r_nack_id,
+                          swi_ar_nack_id,
+                          swi_b_nack_id,
+                          swi_w_nack_id,
+                          swi_aw_nack_id}     ),  //input -  [(NUM_CHANNELS*8)-1:0]              
+  .swi_ch_lp_min       ( {swi_r_data_id,
+                          swi_ar_data_id,
+                          swi_b_data_id,
+                          swi_w_data_id,
+                          swi_aw_data_id}     ),  //input -  [(NUM_CHANNELS*8)-1:0]              
   .swi_ch_lp_max       ( {swi_r_data_id,
                           swi_ar_data_id,
                           swi_b_data_id,

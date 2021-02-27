@@ -37,7 +37,7 @@ module slink_ltssm #(
   input  wire [NUM_RX_LANES-1:0]              rx_ts1_seen,
   input  wire [NUM_RX_LANES-1:0]              rx_ts2_seen,
   input  wire [NUM_RX_LANES-1:0]              rx_sds_seen,
-  output wire                                 sds_sent,
+  output reg                                  sds_sent,
   output reg                                  deskew_enable,
   
   
@@ -118,33 +118,7 @@ localparam    IDLE            = 'd0,
               PX_START_ST     = 'd18,
               ATTR_ST         = 'd19;
 
-`ifdef SIMULATION
-reg [8*40:1] state_name;
-always @(*) begin
-  case(state)
-    IDLE            : state_name = "IDLE";
-    WAIT_CLK        : state_name = "WAIT_CLK";
-    SWITCH          : state_name = "SWITCH";
-    P0_TS1          : state_name = "P0_TS1";
-    P0_TS2          : state_name = "P0_TS2";
-    P0_SDS          : state_name = "P0_SDS";
-    P0              : state_name = "P0";
-    P0_EXIT         : state_name = "P0_EXIT";
-    P1              : state_name = "P1";
-    P1_EXIT         : state_name = "P1_EXIT";
-    P0_P2_CLK_TRAIL : state_name = "P0_P2_CLK_TRAIL";
-    P2              : state_name = "P2";
-    P2_EXIT         : state_name = "P2_EXIT";
-    P0_P3_CLK_TRAIL : state_name = "P0_P3_CLK_TRAIL";
-    P3              : state_name = "P3";
-    RESET_ENTER     : state_name = "RESET_ENTER";
-    RESET_ST        : state_name = "RESET_ST";
-    PX_REQ_ST       : state_name = "PX_REQ_ST";
-    PX_START_ST     : state_name = "PX_START_ST";
-    ATTR_ST         : state_name = "ATTR_ST";
-  endcase
-end
-`endif
+
 
 
 reg   [4:0]               state, nstate;
@@ -198,6 +172,7 @@ reg                       ll_enable_in;
 
 reg                       link_px_req_recv, link_px_req_recv_in;
 reg                       link_px_start_recv, link_px_start_recv_in;
+reg   [2:0]               link_px_req_reg, link_px_req_reg_in;
 
 
 slink_demet_reset u_slink_demet_reset_enable (
@@ -278,6 +253,7 @@ always @(posedge clk or posedge reset) begin
     ll_enable           <= 1'b0;
     link_px_req_recv    <= 1'b0;
     link_px_start_recv  <= 1'b0;
+    link_px_req_reg     <= 3'd0;
   end else begin
     state               <= nstate;
     use_phy_clk         <= use_phy_clk_in;
@@ -305,6 +281,7 @@ always @(posedge clk or posedge reset) begin
     ll_enable           <= ll_enable_in;
     link_px_req_recv    <= link_px_req_recv_in;
     link_px_start_recv  <= link_px_start_recv_in;
+    link_px_req_reg     <= link_px_req_reg_in;
   end
 end 
 
@@ -392,6 +369,8 @@ always @(*) begin
   attr_sent                 = 1'b0;
   link_px_req_recv_in       = 1'b0;
   link_px_start_recv_in     = 1'b0;
+  sds_sent                  = 1'b0;
+  link_px_req_reg_in        = link_px_req_reg;
   
   case(state)
     //--------------------------------------
@@ -566,6 +545,7 @@ always @(*) begin
       end
     
       if(byte_count_end) begin
+        sds_sent                = 1'b1;
         nstate                  = P0;
       end
     end
@@ -581,7 +561,8 @@ always @(*) begin
       if(byte_count_end) begin
         if(attr_ready && ll_tx_idle) begin
           nstate                = ATTR_ST;
-        end else if((link_p3_req || link_p2_req || link_p1_req) && ll_tx_idle) begin
+        end else if(((link_p3_req || link_p2_req || link_p1_req) && ll_tx_idle) && ~link_active_req) begin
+          link_px_req_reg_in    = {link_p3_req, link_p2_req, link_p1_req}; //capture now as it can deassert later
           nstate                = PX_REQ_ST;
         end
       end
@@ -665,18 +646,18 @@ always @(*) begin
       case(byte_count)
         'd0 : begin
           if(DATA_WIDTH==8) begin
-            if(link_p3_req) begin
+            if(link_px_req_reg[2]) begin
               ltssm_lane_data     = P3_REQ_B0;
-            end else if(link_p2_req) begin
+            end else if(link_px_req_reg[1]) begin
               ltssm_lane_data     = P2_REQ_B0;
             end else begin
               ltssm_lane_data     = P1_REQ_B0;
             end          
           end 
           if(DATA_WIDTH==16) begin
-            if(link_p3_req) begin
+            if(link_px_req_reg[2]) begin
               ltssm_lane_data     = {PX_FILLER, P3_REQ_B0};
-            end else if(link_p2_req) begin
+            end else if(link_px_req_reg[1]) begin
               ltssm_lane_data     = {PX_FILLER, P2_REQ_B0};
             end else begin
               ltssm_lane_data     = {PX_FILLER, P1_REQ_B0};
@@ -695,8 +676,8 @@ always @(*) begin
       endcase
             
       if(byte_count_end && link_px_req_recv_in) begin
-        px_exit_state_in          = link_p3_req ? 'd3 :
-                                    link_p2_req ? 'd2 : 'd1;
+        px_exit_state_in          = link_px_req_reg[2] ? 'd3 :
+                                    link_px_req_reg[1] ? 'd2 : 'd1;
         nstate                    = PX_START_ST;
       end
     end
@@ -768,6 +749,7 @@ always @(*) begin
       if(all_tx_ready && all_rx_ready) begin
         rx_sds_seen_reg_in      = 1'b0;
         phy_rx_align_reg_in     = 1'b1;
+        sending_sync_in         = 1'b1;   //start with SYNC
         count_in                = 'd0;
         nstate                  = P0_TS1;
       end
@@ -871,7 +853,7 @@ end
 
 assign phy_rx_align     = {NUM_RX_LANES{phy_rx_align_reg}};
 
-assign sds_sent         = (state == P0_SDS) && (nstate == P0);
+//assign sds_sent         = (state == P0_SDS) && (nstate == P0);
 
 
 
@@ -987,6 +969,35 @@ always @(posedge clk or posedge reset) begin
 end
 
 assign link_hard_reset_cond = hard_reset_cond_ff2 && ~hard_reset_cond_ff3;
+
+
+`ifdef SIMULATION
+reg [8*40:1] state_name;
+always @(*) begin
+  case(state)
+    IDLE            : state_name = "IDLE";
+    WAIT_CLK        : state_name = "WAIT_CLK";
+    SWITCH          : state_name = "SWITCH";
+    P0_TS1          : state_name = "P0_TS1";
+    P0_TS2          : state_name = "P0_TS2";
+    P0_SDS          : state_name = "P0_SDS";
+    P0              : state_name = "P0";
+    P0_EXIT         : state_name = "P0_EXIT";
+    P1              : state_name = "P1";
+    P1_EXIT         : state_name = "P1_EXIT";
+    P0_P2_CLK_TRAIL : state_name = "P0_P2_CLK_TRAIL";
+    P2              : state_name = "P2";
+    P2_EXIT         : state_name = "P2_EXIT";
+    P0_P3_CLK_TRAIL : state_name = "P0_P3_CLK_TRAIL";
+    P3              : state_name = "P3";
+    RESET_ENTER     : state_name = "RESET_ENTER";
+    RESET_ST        : state_name = "RESET_ST";
+    PX_REQ_ST       : state_name = "PX_REQ_ST";
+    PX_START_ST     : state_name = "PX_START_ST";
+    ATTR_ST         : state_name = "ATTR_ST";
+  endcase
+end
+`endif
 
 endmodule
 

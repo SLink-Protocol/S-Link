@@ -23,6 +23,16 @@ INTERRUPT_STATUS          RW
   apb_nack_sent           1'b0        W1C     APB Nack has been sent from this application layer (near-end saw an issue)
   int_nack_seen           1'b0        W1C     INT Nack has been seen on this application layer (far-end saw an issue)
   int_nack_sent           1'b0        W1C     INT Nack has been sent from this application layer (near-end saw an issue)
+  axi_aw_nack_seen        1'b0        W1C     AXI AW Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_aw_nack_sent        1'b0        W1C     AXI AW Channel Nack has been sent from this application layer (near-end saw an issue)
+  axi_w_nack_seen         1'b0        W1C     AXI W  Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_w_nack_sent         1'b0        W1C     AXI W  Channel Nack has been sent from this application layer (near-end saw an issue)
+  axi_b_nack_seen         1'b0        W1C     AXI B  Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_b_nack_sent         1'b0        W1C     AXI B  Channel Nack has been sent from this application layer (near-end saw an issue)
+  axi_ar_nack_seen        1'b0        W1C     AXI AR Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_ar_nack_sent        1'b0        W1C     AXI AR Channel Nack has been sent from this application layer (near-end saw an issue)
+  axi_r_nack_seen         1'b0        W1C     AXI R  Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_r_nack_sent         1'b0        W1C     AXI R  Channel Nack has been sent from this application layer (near-end saw an issue)
 
 #################################
 # PSTATE Controls
@@ -45,10 +55,10 @@ PSTATE_CONTROL            RW
 # APB APP
 #################################
 APB_APP_CREDIT_IDS        RW
-  apb_cr_id               8'h20               Credit Request Data ID for APB Application Channel
-  apb_crack_id            8'h21               Credit Request Data Acknowledgement ID for APB Application Channel
-  apb_ack_id              8'h22               Acknowledgement ID for APB Application Channel
-  apb_nack_id             8'h23               Non-Acknowledgement ID for APB Application Channel
+  apb_cr_id               8'h08               Credit Request Data ID for APB Application Channel
+  apb_crack_id            8'h09               Credit Request Data Acknowledgement ID for APB Application Channel
+  apb_ack_id              8'h0a               Acknowledgement ID for APB Application Channel
+  apb_nack_id             8'h0b               Non-Acknowledgement ID for APB Application Channel
 
 
 
@@ -56,12 +66,23 @@ APB_APP_CREDIT_IDS        RW
 # INT APP
 #################################
 INT_APP_CREDIT_IDS        RW
-  int_cr_id               8'h30               Credit Request Data ID for INT Application Channel
-  int_crack_id            8'h31               Credit Request Data Acknowledgement ID for INT Application Channel
-  int_ack_id              8'h32               Acknowledgement ID for INT Application Channel
-  int_nack_id             8'h33               Non-Acknowledgement ID for INT Application Channel
+  int_cr_id               8'h0c               Credit Request Data ID for INT Application Channel
+  int_crack_id            8'h0d               Credit Request Data Acknowledgement ID for INT Application Channel
+  int_ack_id              8'h0e               Acknowledgement ID for INT Application Channel
+  int_nack_id             8'h0f               Non-Acknowledgement ID for INT Application Channel
 
 
 INT_APP_PKT_ID_WC         RW
-  int_data_id             8'h34               INT Data ID
+  int_data_id             8'h50               INT Data ID
   int_word_count          16'd3               INT Word Count
+
+INT_OVERRIDES             RW
+  int_override            24'd0
+  int_override_mux        1'b0
+
+GPIO_OVERRIDES            RW
+  gpio_override           8'd0
+  gpio_override_mux       1'b0
+
+INT_GPIO_ENABLE           RW
+  int_gpio_enable         32'hffffffff        Allows user to gate the Interrupts/GPIO signals in the event of a spurrious signal

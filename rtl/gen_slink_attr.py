@@ -293,7 +293,7 @@ attr = { 0x0  : SlinkAttr(name='max_txs',      width=3,  rst='NUM_TX_LANES_CLOG2
          0x29 : SlinkAttr(name='p3r_ts1_rx',   width=16, rst='P3R_TS1_RX_RESET',         desc='TS1s to receive if exiting from P3 or when coming out of reset') ,
          0x2a : SlinkAttr(name='p3r_ts2_tx',   width=16, rst='P3R_TS2_TX_RESET',         desc='TS2s to send if exiting from P3 or when coming out of reset'   ) ,
          0x2b : SlinkAttr(name='p3r_ts2_rx',   width=16, rst='P3R_TS2_RX_RESET',         desc='TS2s to receive if exiting from P3 or when coming out of reset') ,
-         0x30 : SlinkAttr(name='sync_freq',    width=8,  rst='PX_CLK_TRAIL_RESET',       desc='How often SYNC Ordered Sets are sent during training') ,
+         0x30 : SlinkAttr(name='sync_freq',    width=8,  rst='SYNC_FREQ_RESET',          desc='How often SYNC Ordered Sets are sent during training') ,
        }
 
 # Print it

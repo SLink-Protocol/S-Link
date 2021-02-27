@@ -24,5 +24,5 @@ S-Link Attributes
   0x29     p3r_ts1_rx    16     0        P3R_TS1_RX_RESET   TS1s to receive if exiting from P3 or when coming out of reset                                 
   0x2a     p3r_ts2_tx    16     0        P3R_TS2_TX_RESET   TS2s to send if exiting from P3 or when coming out of reset                                    
   0x2b     p3r_ts2_rx    16     0        P3R_TS2_RX_RESET   TS2s to receive if exiting from P3 or when coming out of reset                                 
-  0x30     sync_freq     8      0        PX_CLK_TRAIL_RESET How often SYNC Ordered Sets are sent during training                                           
+  0x30     sync_freq     8      0        SYNC_FREQ_RESET    How often SYNC Ordered Sets are sent during training                                           
   ======== ============= ====== ======== ================== ===============================================================================================

@@ -2,10 +2,10 @@ module slink_apb_ini #(
   parameter       TX_APP_DATA_WIDTH     = 128,
   parameter       RX_APP_DATA_WIDTH     = 128,
   
-  parameter [7:0] APB_READ_DT           = 8'h30,
-  parameter [7:0] APB_READ_RSP_DT       = 8'h31,
-  parameter [7:0] APB_WRITE_DT          = 8'h32,
-  parameter [7:0] APB_WRITE_RSP_DT      = 8'h33
+  parameter [7:0] APB_READ_DT           = 8'h24,
+  parameter [7:0] APB_READ_RSP_DT       = 8'h25,
+  parameter [7:0] APB_WRITE_DT          = 8'h26,
+  parameter [7:0] APB_WRITE_RSP_DT      = 8'h27
 )(
   input  wire                           apb_clk,
   input  wire                           apb_reset,
@@ -19,6 +19,15 @@ module slink_apb_ini #(
   input  wire                           apb_pslverr,
 
   input  wire                           enable,
+  
+  input  wire [7:0]                     swi_cr_id,
+  input  wire [7:0]                     swi_crack_id, 
+  input  wire [7:0]                     swi_ack_id,
+  input  wire [7:0]                     swi_nack_id,
+  
+  output wire                           nack_sent,
+  output wire                           nack_seen,
+  output reg                            invalid_resp_pkt,
   
   input  wire                           link_clk,
   input  wire                           link_reset,
@@ -102,7 +111,7 @@ assign read_data_pkt          = l2a_data[7:0] == APB_READ_DT;
 assign l2a_data_dtwc_stripped = l2a_data[L2A_DATA_WIDTH-1:24];
 
 always @(*) begin
-  nstate                = IDLE;
+  nstate                = state;
   apb_psel              = 1'b0;
   apb_penable           = 1'b0;
   apb_pwrite            = 1'b0;
@@ -114,6 +123,7 @@ always @(*) begin
   was_write_in          = was_write;
   apb_prdata_reg_in     = apb_prdata_reg;
   apb_pslverr_reg_in    = apb_pslverr_reg;
+  invalid_resp_pkt      = 1'b0;
   
   case(state)
     //---------------------------------
@@ -131,7 +141,7 @@ always @(*) begin
             apb_paddr         = l2a_data_dtwc_stripped[31:0];
             nstate            = APB_READ;
           end else begin
-            //ADD ERROR
+            invalid_resp_pkt  = 1'b1;
           end
         end
       end
@@ -216,22 +226,24 @@ slink_generic_fc_sm #(
   .app_clk             ( apb_clk              ),            
   .app_reset           ( apb_reset            ),            
   .enable              ( enable               ),         
-  .swi_cr_id           ( 8'h12                ),
-  .swi_crack_id        ( 8'h13                ),
-  .swi_ack_id          ( 8'h10                ),
-  .swi_nack_id         ( 8'h11                ),          
+  .swi_cr_id           ( swi_cr_id            ),
+  .swi_crack_id        ( swi_crack_id         ),
+  .swi_ack_id          ( swi_ack_id           ),
+  .swi_nack_id         ( swi_nack_id          ),    
+  .swi_data_id         ( 8'hff                ),
+  .swi_word_count      ( 16'd0                ),      
   .a2l_valid           ( a2l_valid            ),  
   .a2l_ready           ( a2l_ready            ),  
   .a2l_data            ( a2l_data             ),      
   .l2a_valid           ( l2a_valid            ),  
   .l2a_accept          ( l2a_accept           ),  
   .l2a_data            ( l2a_data             ),      
-  .tx_fifo_empty       (                      ),  //connme          
-  .rx_fifo_empty       (                      ),  //connme          
+  .tx_fifo_empty       (                      ), 
+  .rx_fifo_empty       (                      ), 
   .link_clk            ( link_clk             ),          
   .link_reset          ( link_reset           ),          
-  .nack_sent           (                      ),  //connme       
-  .nack_seen           (                      ),  //connme       
+  .nack_sent           ( nack_sent            ), 
+  .nack_seen           ( nack_seen            ), 
   .tx_sop              ( tx_sop               ),  
   .tx_data_id          ( tx_data_id           ),  
   .tx_word_count       ( tx_word_count        ),  

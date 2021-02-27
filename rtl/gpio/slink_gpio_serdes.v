@@ -3,7 +3,6 @@
   * to a lower width (must be a power of two)
   */
 module slink_gpio_serdes #(
-  parameter   IS_MASTER       = 1,
   parameter   PAR_DATA_WIDTH  = 8,
   parameter   IO_DATA_WIDTH   = 1
 )(
@@ -41,7 +40,7 @@ wire                        clk_idle_ff2;
 wire                        serial_clk_gated;
 
 
-
+wire                        clk_active;
 reg   [COUNT_CLOG2-1:0]     count;
 wire  [COUNT_CLOG2-1:0]     count_in;
 wire                        tx_en_ff2;
@@ -66,32 +65,40 @@ slink_demet_reset u_slink_demet_reset[3:0] (
               clk_idle_ff2}     )); 
 
 assign clk_ready = clk_en_ff2;
+
+assign clk_active = (clk_en_ff2 && ~clk_idle_ff2);
   
 
 slink_clock_gate u_slink_clock_gate (
   .clk_in            ( serial_clk         ),    
   .reset             ( serial_reset       ),    
   .core_scan_mode    ( core_scan_mode     ),  
-  .enable            ( (clk_en_ff2 &&
-                        ~clk_idle_ff2)    ),  
+  .enable            ( clk_active         ),  
   .disable_clkgate   ( 1'b0               ),  
   .clk_out           ( serial_clk_gated   )); 
 
 assign tx_ser_clk = serial_clk_gated;
 
+
+//thanks ARM! 
+//The clock gate latch seems to just let X prop
+//when you default the clock high. This is probably
+//better anyways, but I don't see where it really matters
+
 always @(posedge serial_clk_gated or posedge serial_reset) begin
   if(serial_reset) begin
-    count     <= {COUNT_CLOG2{1'b0}};
+    //count     <= {COUNT_CLOG2{1'b0}};   
+    count     <= {COUNT_CLOG2{1'b1}};
   end else begin
     count     <= count_in;
   end
 end
 
 assign phy_clk_pre  = ~count[COUNT_CLOG2-1];
-//assign phy_clk      = phy_clk_pre;  //add buffer
-// slink_clock_buf u_slink_clock_buf (
-//   .clk_in    ( phy_clk_pre     ),            
-//   .clk_out   ( phy_clk         )); 
+//assign phy_clk_pre  = count[COUNT_CLOG2-1];
+
+
+
 
 slink_clock_mux u_slink_clock_mux_phy_clk (
   .clk0    ( phy_clk_pre        ),   
@@ -99,8 +106,9 @@ slink_clock_mux u_slink_clock_mux_phy_clk (
   .sel     ( core_scan_mode     ),   
   .clk_out ( phy_clk            )); 
 
-//assign count_in     = (tx_en_ff2 || rx_en_ff2) ? count + 'd1 : 'd0;
-assign count_in     = (clk_en_ff2 && ~clk_idle_ff2) ? count + 'd1 : 'd0;
+
+//assign count_in     = clk_active ? count + 'd1 : 'd0;
+assign count_in     = clk_active ? count + 'd1 : {COUNT_CLOG2{1'b1}};
 assign tx_ready     = tx_en_ff2;  
 assign tx_ser_data  = tx_ser_data_array[count];
 

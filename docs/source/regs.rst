@@ -10,11 +10,12 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ======= ======== ======== ========== ================================================
-  Name    Index    Type     Reset      Description                                     
-  ======= ======== ======== ========== ================================================
-  SWRESET [0]      RW       0x1        Main reset. Must be cleared prior to operation. 
-  ======= ======== ======== ========== ================================================
+  =========== ======== ======== ========== ================================================
+  Name        Index    Type     Reset      Description                                     
+  =========== ======== ======== ========== ================================================
+  SWRESET     [0]      RW       0x1        Main reset. Must be cleared prior to operation. 
+  SWRESET_MUX [1]      RW       0x0        0 - Use logic, 1 - Use register                 
+  =========== ======== ======== ========== ================================================
 
 
 ENABLE
@@ -27,11 +28,12 @@ Description:
 .. table::
   :widths: 25 10 10 10 50
 
-  ====== ======== ======== ========== ======================================================================================================
-  Name   Index    Type     Reset      Description                                                                                           
-  ====== ======== ======== ========== ======================================================================================================
-  ENABLE [0]      RW       0x0        Main enable. Must be set prior to operation. Any configurations should be performed prior to enabling.
-  ====== ======== ======== ========== ======================================================================================================
+  ========== ======== ======== ========== ======================================================================================================
+  Name       Index    Type     Reset      Description                                                                                           
+  ========== ======== ======== ========== ======================================================================================================
+  ENABLE     [0]      RW       0x0        Main enable. Must be set prior to operation. Any configurations should be performed prior to enabling.
+  ENABLE_MUX [1]      RW       0x0        0 - Use logic, 1 - Use register                                                                       
+  ========== ======== ======== ========== ======================================================================================================
 
 
 INTERRUPT_STATUS
@@ -137,10 +139,27 @@ Description:
   ============= ======== ======== ========== =======================================
 
 
+SHORT_PACKET_MAX
+----------------
+
+Address: 0x1c
+
+Description: 
+
+.. table::
+  :widths: 25 10 10 10 50
+
+  ================ ======== ======== ========== ===================================================================
+  Name             Index    Type     Reset      Description                                                        
+  ================ ======== ======== ========== ===================================================================
+  SHORT_PACKET_MAX [7:0]    RW       0x2f       This setting allows you to change the window for short/long packets
+  ================ ======== ======== ========== ===================================================================
+
+
 SW_ATTR_ADDR_DATA
 -----------------
 
-Address: 0x1c
+Address: 0x20
 
 Description: 
 
@@ -158,7 +177,7 @@ Description:
 SW_ATTR_CONTROLS
 ----------------
 
-Address: 0x20
+Address: 0x24
 
 Description: 
 
@@ -176,7 +195,7 @@ Description:
 SW_ATTR_DATA_READ
 -----------------
 
-Address: 0x24
+Address: 0x28
 
 Description: 
 
@@ -193,7 +212,7 @@ Description:
 SW_ATTR_FIFO_STATUS
 -------------------
 
-Address: 0x28
+Address: 0x2c
 
 Description: 
 
@@ -213,7 +232,7 @@ Description:
 SW_ATTR_SHADOW_UPDATE
 ---------------------
 
-Address: 0x2c
+Address: 0x30
 
 Description: 
 
@@ -230,7 +249,7 @@ Description:
 SW_ATTR_EFFECTIVE_UPDATE
 ------------------------
 
-Address: 0x30
+Address: 0x34
 
 Description: 
 
@@ -247,7 +266,7 @@ Description:
 STATE_STATUS
 ------------
 
-Address: 0x34
+Address: 0x38
 
 Description: 
 
@@ -268,7 +287,7 @@ Description:
 DEBUG_BUS_CTRL
 --------------
 
-Address: 0x38
+Address: 0x3c
 
 Description: Debug observation bus selection for signals that have a mux override
 
@@ -278,14 +297,14 @@ Description: Debug observation bus selection for signals that have a mux overrid
   ================== ======== ======== ========== ================================
   Name               Index    Type     Reset      Description                     
   ================== ======== ======== ========== ================================
-  DEBUG_BUS_CTRL_SEL [1:0]    RW       0x0        Select signal for DEBUG_BUS_CTRL
+  DEBUG_BUS_CTRL_SEL [2:0]    RW       0x0        Select signal for DEBUG_BUS_CTRL
   ================== ======== ======== ========== ================================
 
 
 DEBUG_BUS_STATUS
 ----------------
 
-Address: 0x3c
+Address: 0x40
 
 Description: Debug observation bus for signals that have a mux override
 

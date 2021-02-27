@@ -6,6 +6,7 @@ module slink_serdes_front_end #(
   parameter LTSSM_REGISTER_TXDATA = 1,
   
   parameter DESKEW_FIFO_DEPTH     = 4,  
+  parameter RETIME_FIFO_DEPTH     = 0,
   
   //Attribute
   parameter START_IN_ONE_LANE     = 0,
@@ -84,6 +85,8 @@ module slink_serdes_front_end #(
   output wire [(NUM_RX_LANES*
                 PHY_DATA_WIDTH)-1:0]  ll_rx_data,
   output wire                         ll_rx_sds_recv,
+  
+  output wire [4:0]                   ltssm_state,
   
   
   // PHY
@@ -230,7 +233,7 @@ slink_ltssm #(
   .ll_tx_valid             ( ll_tx_valid                        ),
   .ll_enable               ( ll_enable                          ),
   .ltssm_data              ( phy_tx_data                        ),
-  .ltssm_state             (                                    )); 
+  .ltssm_state             ( ltssm_state                        )); 
 
 
 assign ll_rx_sds_recv = (&rx_sds_seen);
@@ -240,7 +243,7 @@ slink_rx_align_deskew #(
   .FIFO_DEPTH         ( DESKEW_FIFO_DEPTH ),
   .NUM_LANES          ( NUM_RX_LANES      ),
   .DATA_WIDTH         ( PHY_DATA_WIDTH    ),
-  .RETIME_FIFO_DEPTH  ( 0                 )
+  .RETIME_FIFO_DEPTH  ( RETIME_FIFO_DEPTH )
 ) u_slink_rx_align_deskew (
   .clk                 ( link_clk                 ),  
   .reset               ( link_clk_reset           ),  

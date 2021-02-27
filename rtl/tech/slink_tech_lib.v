@@ -66,8 +66,8 @@ module slink_reset_sync
     .sig_in       ( 1'b0              ),
     .sig_out      ( reset_in_ff2      ));
 
-  assign  reset_out = ~scan_ctrl & (reset_in | reset_in_ff2);
-
+  //assign  reset_out = ~scan_ctrl & (reset_in | reset_in_ff2);
+  assign  reset_out = ~scan_ctrl & reset_in_ff2;
 endmodule
 
 
@@ -521,7 +521,8 @@ module slink_multibit_sync #(
   output wire [DATA_SIZE-1:0] rdata
 );
 
-reg [DATA_SIZE-1:0]   mem [2];
+//reg [DATA_SIZE-1:0]   mem [2];
+reg [DATA_SIZE-1:0]   mem [1:0];
 
 reg       wptr;
 wire      wptr_in;
@@ -629,11 +630,11 @@ assign write_1 = en_1 &  we_1;
 assign read_1  = en_1 & ~we_1;
 
 integer j;
-always @(posedge clk_1) begin
-  if (write_1) begin
-    mem[addr_1] <= wdata_1;
-  end
-end
+// always @(posedge clk_1) begin
+//   if (write_1) begin
+//     mem[addr_1] <= wdata_1;
+//   end
+// end
 
 always @(posedge clk_1) begin
   if (read_1) begin

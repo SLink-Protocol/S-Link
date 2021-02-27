@@ -56,7 +56,12 @@ slink_demet_reset u_slink_demet_reset_bist_en (
   .sig_in  ( swi_bist_en  ),       
   .sig_out ( bist_en_ff2  )); 
 
-
+wire bist_reset_ff2;
+slink_demet_reset u_slink_demet_reset_bist_reset (
+  .clk     ( clk             ),       
+  .reset   ( reset           ),       
+  .sig_in  ( swi_bist_reset  ),       
+  .sig_out ( bist_reset_ff2  )); 
 
 always @(posedge clk or posedge reset) begin
   if(reset) begin
@@ -69,9 +74,9 @@ always @(posedge clk or posedge reset) begin
   end else begin
     state         <= nstate;
     byte_count    <= byte_count_in;
-    sop           <= sop_in;
-    data_id       <= data_id_in;
-    word_count    <= word_count_in;
+    sop           <= bist_reset_ff2 ? 1'b0  : sop_in;
+    data_id       <= bist_reset_ff2 ? 8'd0  : data_id_in;
+    word_count    <= bist_reset_ff2 ? 16'd0 : word_count_in;
     app_data      <= app_data_in;
   end
 end
@@ -214,6 +219,10 @@ always @(*) begin
     end
     
   endcase
+  
+  if(~bist_en_ff2 || bist_reset_ff2) begin
+    nstate    = IDLE;
+  end
 end
 
 

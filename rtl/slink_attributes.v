@@ -696,7 +696,7 @@ slink_attribute_base #(
   .ADDR                ( 'h30                     ),
   .NAME                ( "sync_freq"              ),
   .WIDTH               ( 8                        ),
-  .RESET_VAL           ( PX_CLK_TRAIL_RESET       ),
+  .RESET_VAL           ( SYNC_FREQ_RESET          ),
   .IS_RO               (                        0 )
 ) u_slink_attribute_base_sync_freq (
   .clk                 ( clk                      ),     

@@ -1,6 +1,6 @@
 //===================================================================
 //
-// Created by steven on August/30/2020 at 11:55:35
+// Created by sbridges on February/02/2021 at 13:47:33
 //
 // slink_ctrl_regs_top.v
 //
@@ -12,9 +12,11 @@ module slink_ctrl_regs_top #(
   parameter    ADDR_WIDTH = 8
 )(
   //SWRESET
-  output wire         swi_swreset,
+  input  wire         swreset,
+  output wire         swi_swreset_muxed,
   //ENABLE
-  output wire         swi_enable,
+  input  wire         enable,
+  output wire         swi_enable_muxed,
   //INTERRUPT_STATUS
   input  wire         w1c_in_ecc_corrupted,
   output wire         w1c_out_ecc_corrupted,
@@ -48,6 +50,8 @@ module slink_ctrl_regs_top #(
   output wire         swi_crc_corrupted_causes_reset,
   //COUNT_VAL_1US
   output wire [9:0]   swi_count_val_1us,
+  //SHORT_PACKET_MAX
+  output wire [7:0]   swi_short_packet_max,
   //SW_ATTR_ADDR_DATA
   output wire [15:0]  swi_sw_attr_addr,
   output wire [15:0]  swi_sw_attr_wdata,
@@ -144,32 +148,48 @@ module slink_ctrl_regs_top #(
 
 
   //Regs for Mux Override sel
+  reg  reg_swreset_mux;
+  reg  reg_enable_mux;
 
 
 
   //---------------------------
   // SWRESET
   // swreset - Main reset. Must be cleared prior to operation. 
+  // swreset_mux - 0 - Use logic, 1 - Use register
   //---------------------------
   wire [31:0] SWRESET_reg_read;
-  reg         reg_swreset;
+  reg          reg_swreset;
 
   always @(posedge RegClk or posedge RegReset) begin
     if(RegReset) begin
       reg_swreset                            <= 1'h1;
+      reg_swreset_mux                        <= 1'h0;
     end else if(RegAddr == 'h0 && RegWrEn) begin
       reg_swreset                            <= RegWrData[0];
+      reg_swreset_mux                        <= RegWrData[1];
     end else begin
       reg_swreset                            <= reg_swreset;
+      reg_swreset_mux                        <= reg_swreset_mux;
     end
   end
 
-  assign SWRESET_reg_read = {31'h0,
+  assign SWRESET_reg_read = {30'h0,
+          reg_swreset_mux,
           reg_swreset};
 
   //-----------------------
-  assign swi_swreset = reg_swreset;
 
+  wire        swi_swreset_muxed_pre;
+  slink_clock_mux u_slink_clock_mux_swreset (
+    .clk0    ( swreset                            ),              
+    .clk1    ( reg_swreset                        ),              
+    .sel     ( reg_swreset_mux                    ),      
+    .clk_out ( swi_swreset_muxed_pre              )); 
+
+  assign swi_swreset_muxed = swi_swreset_muxed_pre;
+
+  //-----------------------
 
 
 
@@ -177,26 +197,40 @@ module slink_ctrl_regs_top #(
   //---------------------------
   // ENABLE
   // enable - Main enable. Must be set prior to operation. Any configurations should be performed prior to enabling.
+  // enable_mux - 0 - Use logic, 1 - Use register
   //---------------------------
   wire [31:0] ENABLE_reg_read;
-  reg         reg_enable;
+  reg          reg_enable;
 
   always @(posedge RegClk or posedge RegReset) begin
     if(RegReset) begin
       reg_enable                             <= 1'h0;
+      reg_enable_mux                         <= 1'h0;
     end else if(RegAddr == 'h4 && RegWrEn) begin
       reg_enable                             <= RegWrData[0];
+      reg_enable_mux                         <= RegWrData[1];
     end else begin
       reg_enable                             <= reg_enable;
+      reg_enable_mux                         <= reg_enable_mux;
     end
   end
 
-  assign ENABLE_reg_read = {31'h0,
+  assign ENABLE_reg_read = {30'h0,
+          reg_enable_mux,
           reg_enable};
 
   //-----------------------
-  assign swi_enable = reg_enable;
 
+  wire        swi_enable_muxed_pre;
+  slink_clock_mux u_slink_clock_mux_enable (
+    .clk0    ( enable                             ),              
+    .clk1    ( reg_enable                         ),              
+    .sel     ( reg_enable_mux                     ),      
+    .clk_out ( swi_enable_muxed_pre               )); 
+
+  assign swi_enable_muxed = swi_enable_muxed_pre;
+
+  //-----------------------
 
 
 
@@ -580,6 +614,33 @@ module slink_ctrl_regs_top #(
 
 
   //---------------------------
+  // SHORT_PACKET_MAX
+  // short_packet_max - This setting allows you to change the window for short/long packets
+  //---------------------------
+  wire [31:0] SHORT_PACKET_MAX_reg_read;
+  reg [7:0]   reg_short_packet_max;
+
+  always @(posedge RegClk or posedge RegReset) begin
+    if(RegReset) begin
+      reg_short_packet_max                   <= 8'h2f;
+    end else if(RegAddr == 'h1c && RegWrEn) begin
+      reg_short_packet_max                   <= RegWrData[7:0];
+    end else begin
+      reg_short_packet_max                   <= reg_short_packet_max;
+    end
+  end
+
+  assign SHORT_PACKET_MAX_reg_read = {24'h0,
+          reg_short_packet_max};
+
+  //-----------------------
+  assign swi_short_packet_max = reg_short_packet_max;
+
+
+
+
+
+  //---------------------------
   // SW_ATTR_ADDR_DATA
   // sw_attr_addr - Address for software based attribute updates
   // sw_attr_wdata - Data for software based attribute updates
@@ -592,7 +653,7 @@ module slink_ctrl_regs_top #(
     if(RegReset) begin
       reg_sw_attr_addr                       <= 16'h0;
       reg_sw_attr_wdata                      <= 16'h0;
-    end else if(RegAddr == 'h1c && RegWrEn) begin
+    end else if(RegAddr == 'h20 && RegWrEn) begin
       reg_sw_attr_addr                       <= RegWrData[15:0];
       reg_sw_attr_wdata                      <= RegWrData[31:16];
     end else begin
@@ -627,7 +688,7 @@ module slink_ctrl_regs_top #(
     if(RegReset) begin
       reg_sw_attr_write                      <= 1'h1;
       reg_sw_attr_local                      <= 1'h1;
-    end else if(RegAddr == 'h20 && RegWrEn) begin
+    end else if(RegAddr == 'h24 && RegWrEn) begin
       reg_sw_attr_write                      <= RegWrData[0];
       reg_sw_attr_local                      <= RegWrData[1];
     end else begin
@@ -656,7 +717,7 @@ module slink_ctrl_regs_top #(
   //---------------------------
   wire [31:0] SW_ATTR_DATA_READ_reg_read;
 
-  assign rfifo_rinc_sw_attr_rdata = (RegAddr == 'h24 && PENABLE && PSEL && ~(PWRITE || RegWrEn));
+  assign rfifo_rinc_sw_attr_rdata = (RegAddr == 'h28 && PENABLE && PSEL && ~(PWRITE || RegWrEn));
   assign SW_ATTR_DATA_READ_reg_read = {16'h0,
           rfifo_sw_attr_rdata};
 
@@ -693,8 +754,8 @@ module slink_ctrl_regs_top #(
   //---------------------------
   wire [31:0] SW_ATTR_SHADOW_UPDATE_reg_read;
 
-  assign wfifo_sw_attr_shadow_update      = (RegAddr == 'h2c && RegWrEn) ? RegWrData[0] : 'd0;
-  assign wfifo_winc_sw_attr_shadow_update = (RegAddr == 'h2c && RegWrEn);
+  assign wfifo_sw_attr_shadow_update      = (RegAddr == 'h30 && RegWrEn) ? RegWrData[0] : 'd0;
+  assign wfifo_winc_sw_attr_shadow_update = (RegAddr == 'h30 && RegWrEn);
   assign SW_ATTR_SHADOW_UPDATE_reg_read = {31'h0,
           1'd0}; //Reserved
 
@@ -709,8 +770,8 @@ module slink_ctrl_regs_top #(
   //---------------------------
   wire [31:0] SW_ATTR_EFFECTIVE_UPDATE_reg_read;
 
-  assign wfifo_sw_attr_effective_update      = (RegAddr == 'h30 && RegWrEn) ? RegWrData[0] : 'd0;
-  assign wfifo_winc_sw_attr_effective_update = (RegAddr == 'h30 && RegWrEn);
+  assign wfifo_sw_attr_effective_update      = (RegAddr == 'h34 && RegWrEn) ? RegWrData[0] : 'd0;
+  assign wfifo_winc_sw_attr_effective_update = (RegAddr == 'h34 && RegWrEn);
   assign SW_ATTR_EFFECTIVE_UPDATE_reg_read = {31'h0,
           1'd0}; //Reserved
 
@@ -749,20 +810,20 @@ module slink_ctrl_regs_top #(
   // DEBUG_BUS_CTRL_SEL - Select signal for DEBUG_BUS_CTRL
   //---------------------------
   wire [31:0] DEBUG_BUS_CTRL_reg_read;
-  reg [1:0]   reg_debug_bus_ctrl_sel;
-  wire [1:0]   swi_debug_bus_ctrl_sel;
+  reg [2:0]   reg_debug_bus_ctrl_sel;
+  wire [2:0]   swi_debug_bus_ctrl_sel;
 
   always @(posedge RegClk or posedge RegReset) begin
     if(RegReset) begin
-      reg_debug_bus_ctrl_sel                 <= 2'h0;
-    end else if(RegAddr == 'h38 && RegWrEn) begin
-      reg_debug_bus_ctrl_sel                 <= RegWrData[1:0];
+      reg_debug_bus_ctrl_sel                 <= 3'h0;
+    end else if(RegAddr == 'h3c && RegWrEn) begin
+      reg_debug_bus_ctrl_sel                 <= RegWrData[2:0];
     end else begin
       reg_debug_bus_ctrl_sel                 <= reg_debug_bus_ctrl_sel;
     end
   end
 
-  assign DEBUG_BUS_CTRL_reg_read = {30'h0,
+  assign DEBUG_BUS_CTRL_reg_read = {29'h0,
           reg_debug_bus_ctrl_sel};
 
   //-----------------------
@@ -783,6 +844,8 @@ module slink_ctrl_regs_top #(
     case(swi_debug_bus_ctrl_sel)
       'd0 : debug_bus_ctrl_status = {28'd0, sw_attr_recv_fifo_empty, sw_attr_recv_fifo_full, sw_attr_send_fifo_empty, sw_attr_send_fifo_full};
       'd1 : debug_bus_ctrl_status = {14'd0, deskew_state, ll_rx_state, ll_tx_state, 3'd0, ltssm_state};
+      'd2 : debug_bus_ctrl_status = {31'd0, swi_swreset_muxed};
+      'd3 : debug_bus_ctrl_status = {31'd0, swi_enable_muxed};
       default : debug_bus_ctrl_status = 32'd0;
     endcase
   end 
@@ -808,15 +871,16 @@ module slink_ctrl_regs_top #(
       'h10   : prdata_sel = PSTATE_CONTROL_reg_read;
       'h14   : prdata_sel = ERROR_CONTROL_reg_read;
       'h18   : prdata_sel = COUNT_VAL_1US_reg_read;
-      'h1c   : prdata_sel = SW_ATTR_ADDR_DATA_reg_read;
-      'h20   : prdata_sel = SW_ATTR_CONTROLS_reg_read;
-      'h24   : prdata_sel = SW_ATTR_DATA_READ_reg_read;
-      'h28   : prdata_sel = SW_ATTR_FIFO_STATUS_reg_read;
-      'h2c   : prdata_sel = SW_ATTR_SHADOW_UPDATE_reg_read;
-      'h30   : prdata_sel = SW_ATTR_EFFECTIVE_UPDATE_reg_read;
-      'h34   : prdata_sel = STATE_STATUS_reg_read;
-      'h38   : prdata_sel = DEBUG_BUS_CTRL_reg_read;
-      'h3c   : prdata_sel = DEBUG_BUS_STATUS_reg_read;
+      'h1c   : prdata_sel = SHORT_PACKET_MAX_reg_read;
+      'h20   : prdata_sel = SW_ATTR_ADDR_DATA_reg_read;
+      'h24   : prdata_sel = SW_ATTR_CONTROLS_reg_read;
+      'h28   : prdata_sel = SW_ATTR_DATA_READ_reg_read;
+      'h2c   : prdata_sel = SW_ATTR_FIFO_STATUS_reg_read;
+      'h30   : prdata_sel = SW_ATTR_SHADOW_UPDATE_reg_read;
+      'h34   : prdata_sel = SW_ATTR_EFFECTIVE_UPDATE_reg_read;
+      'h38   : prdata_sel = STATE_STATUS_reg_read;
+      'h3c   : prdata_sel = DEBUG_BUS_CTRL_reg_read;
+      'h40   : prdata_sel = DEBUG_BUS_STATUS_reg_read;
 
       default : prdata_sel = 32'd0;
     endcase
@@ -850,6 +914,7 @@ module slink_ctrl_regs_top #(
       'h34   : pslverr_pre = 1'b0;
       'h38   : pslverr_pre = 1'b0;
       'h3c   : pslverr_pre = 1'b0;
+      'h40   : pslverr_pre = 1'b0;
 
       default : pslverr_pre = 1'b1;
     endcase

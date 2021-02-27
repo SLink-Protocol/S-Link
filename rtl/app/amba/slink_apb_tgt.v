@@ -2,10 +2,10 @@ module slink_apb_tgt #(
   parameter       TX_APP_DATA_WIDTH     = 128,
   parameter       RX_APP_DATA_WIDTH     = 128,
   
-  parameter [7:0] APB_READ_DT           = 8'h30,
-  parameter [7:0] APB_READ_RSP_DT       = 8'h31,
-  parameter [7:0] APB_WRITE_DT          = 8'h32,
-  parameter [7:0] APB_WRITE_RSP_DT      = 8'h33
+  parameter [7:0] APB_READ_DT           = 8'h24,
+  parameter [7:0] APB_READ_RSP_DT       = 8'h25,
+  parameter [7:0] APB_WRITE_DT          = 8'h26,
+  parameter [7:0] APB_WRITE_RSP_DT      = 8'h27
 )(
   input  wire                           apb_clk,
   input  wire                           apb_reset,
@@ -19,6 +19,15 @@ module slink_apb_tgt #(
   output reg                            apb_pslverr,
 
   input  wire                           enable,
+  
+  input  wire [7:0]                     swi_cr_id,
+  input  wire [7:0]                     swi_crack_id, 
+  input  wire [7:0]                     swi_ack_id,
+  input  wire [7:0]                     swi_nack_id,
+  
+  output wire                           nack_sent,
+  output wire                           nack_seen,
+  output reg                            invalid_resp_pkt,
   
   input  wire                           link_clk,
   input  wire                           link_reset,
@@ -38,15 +47,15 @@ module slink_apb_tgt #(
 );
 
 localparam  A2L_DATA_WIDTH  = 64 + 24;
-//localparam  L2A_DATA_WIDTH  = 64 + 24;   //Might can make this 33+24?
-localparam  L2A_DATA_WIDTH  = 33 + 24;   //Might can make this 33+24?
+localparam  L2A_DATA_WIDTH  = 33 + 24;   
 
 localparam  [15:0] APB_READ_WC     = 4;
 localparam  [15:0] APB_WRITE_WC    = 8;
 
 localparam  IDLE        = 'd0,
             APB_READ    = 'd1,
-            APB_WRITE   = 'd2;
+            APB_WRITE   = 'd2,
+            APB_STALL   = 'd3;
 
 
 /*
@@ -102,6 +111,7 @@ always @(*) begin
   a2l_valid               = 1'b0;
   
   l2a_accept              = 1'b0;
+  invalid_resp_pkt        = 1'b0;
   
   case(state)
     //---------------------------------
@@ -112,14 +122,30 @@ always @(*) begin
             a2l_data_dtwc_stripped  = {apb_pwdata, apb_paddr};
             a2l_data                = {a2l_data_dtwc_stripped, APB_WRITE_WC, APB_WRITE_DT};
             a2l_valid               = 1'b1;
-            nstate                  = a2l_ready ? APB_WRITE : IDLE;
+            nstate                  = a2l_ready ? APB_WRITE : APB_STALL;
           end else begin
             a2l_data_dtwc_stripped  = {32'd0, apb_paddr};
             a2l_data                = {a2l_data_dtwc_stripped, APB_READ_WC, APB_READ_DT};
             a2l_valid               = 1'b1;
-            nstate                  = a2l_ready ? APB_READ  : IDLE;
+            nstate                  = a2l_ready ? APB_READ  : APB_STALL;
           end
         end
+      end
+    end
+    
+    //---------------------------------
+    //If a2l_ready is not asserted just wait here until we are good to go
+    APB_STALL : begin
+      if(apb_pwrite) begin
+        a2l_data_dtwc_stripped  = {apb_pwdata, apb_paddr};
+        a2l_data                = {a2l_data_dtwc_stripped, APB_WRITE_WC, APB_WRITE_DT};
+        a2l_valid               = 1'b1;
+        nstate                  = a2l_ready ? APB_WRITE : APB_STALL;
+      end else begin
+        a2l_data_dtwc_stripped  = {32'd0, apb_paddr};
+        a2l_data                = {a2l_data_dtwc_stripped, APB_READ_WC, APB_READ_DT};
+        a2l_valid               = 1'b1;
+        nstate                  = a2l_ready ? APB_READ  : APB_STALL;
       end
     end
     
@@ -132,7 +158,7 @@ always @(*) begin
           l2a_accept      = 1'b1;
           nstate          = IDLE;
         end else begin
-          //ADD ERROR
+          invalid_resp_pkt= 1'b1;
         end
       end
     end
@@ -148,7 +174,7 @@ always @(*) begin
           l2a_accept      = 1'b1;
           nstate          = IDLE;
         end else begin
-          //ADD ERROR
+          invalid_resp_pkt= 1'b1;
         end
       end
     end
@@ -179,22 +205,24 @@ slink_generic_fc_sm #(
   .app_clk             ( apb_clk              ),            
   .app_reset           ( apb_reset            ),            
   .enable              ( enable               ),         
-  .swi_cr_id           ( 8'h12                ),
-  .swi_crack_id        ( 8'h13                ),
-  .swi_ack_id          ( 8'h10                ),
-  .swi_nack_id         ( 8'h11                ),          
+  .swi_cr_id           ( swi_cr_id            ),
+  .swi_crack_id        ( swi_crack_id         ),
+  .swi_ack_id          ( swi_ack_id           ),
+  .swi_nack_id         ( swi_nack_id          ), 
+  .swi_data_id         ( 8'hff                ),
+  .swi_word_count      ( 16'd0                ),
   .a2l_valid           ( a2l_valid            ),  
   .a2l_ready           ( a2l_ready            ),  
   .a2l_data            ( a2l_data             ),      
   .l2a_valid           ( l2a_valid            ),  
   .l2a_accept          ( l2a_accept           ),  
   .l2a_data            ( l2a_data             ),      
-  .tx_fifo_empty       (                      ),  //connme          
-  .rx_fifo_empty       (                      ),  //connme          
+  .tx_fifo_empty       (                      ),  
+  .rx_fifo_empty       (                      ),  
   .link_clk            ( link_clk             ),          
   .link_reset          ( link_reset           ),          
-  .nack_sent           (                      ),  //connme       
-  .nack_seen           (                      ),  //connme       
+  .nack_sent           ( nack_sent            ), 
+  .nack_seen           ( nack_seen            ), 
   .tx_sop              ( tx_sop               ),  
   .tx_data_id          ( tx_data_id           ),  
   .tx_word_count       ( tx_word_count        ),  

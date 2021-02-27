@@ -110,7 +110,8 @@ integer j;
 always @(*) begin
   lower_index_pri  = {NUM_CHANNELS_CLOG2{1'b0}};
   for(j = (NUM_CHANNELS-1); j >= 0; j = j - 1) begin
-    if((j <= curr_ch_reg) && tx_sop_ch[j]) begin
+    //if((j <= curr_ch_reg) && tx_sop_ch[j]) begin
+    if((j < curr_ch_reg) && tx_sop_ch[j]) begin
       lower_index_pri  = j;
     end
   end

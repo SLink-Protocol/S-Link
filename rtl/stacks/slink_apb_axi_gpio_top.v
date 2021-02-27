@@ -1,12 +1,14 @@
 module slink_apb_axi_gpio_top #(
-  parameter     IS_HOST       = 1,
-  parameter     IO_DATA_WIDTH = 1,
+  parameter     IS_HOST           = 1,
+  parameter     IO_DATA_WIDTH     = 1,
+  parameter     IO_NUM_LANES      = 1,
   
-  parameter     NUM_INTS      = 16,
-  parameter     NUM_GPIOS     = 8,
+  parameter     NUM_INTS          = 24,
+  parameter     NUM_GPIOS         = 8,
+  parameter     RETIME_FIFO_DEPTH = 0,
   
-  parameter   AXI_ADDR_WIDTH  = 32,
-  parameter   AXI_DATA_WIDTH  = 64
+  parameter   AXI_ADDR_WIDTH      = 32,
+  parameter   AXI_DATA_WIDTH      = 64
 )(
   input  wire                           core_scan_mode,
   input  wire                           core_scan_clk,
@@ -64,6 +66,9 @@ module slink_apb_axi_gpio_top #(
   //--------------------------------------
   // AXI Target
   //--------------------------------------
+  input  wire                           axi_clk,
+  input  wire                           axi_reset,
+  
   input  wire [7:0]                     axi_tgt_awid,
   input  wire [AXI_ADDR_WIDTH-1:0]      axi_tgt_awaddr,
   input  wire [7:0]                     axi_tgt_awlen,
@@ -161,11 +166,13 @@ module slink_apb_axi_gpio_top #(
   input  wire                           por_reset,
   input  wire                           refclk,
   input  wire                           hsclk,
-    
-  input  wire                           slink_rx_clk,
+  
+  //input  wire                           slink_rx_clk,
   output wire                           slink_tx_clk,
-  output wire [IO_DATA_WIDTH-1:0]       slink_tx_data,                       
-  input  wire [IO_DATA_WIDTH-1:0]       slink_rx_data,
+  output wire [(IO_DATA_WIDTH*
+                IO_NUM_LANES)-1:0]      slink_tx_data,                       
+  input  wire [(IO_DATA_WIDTH*
+                IO_NUM_LANES)-1:0]      slink_rx_data,
   
   output wire                           slink_gpio_reset_n_oen,
   input  wire                           slink_gpio_reset_n,
@@ -200,21 +207,23 @@ wire                          p2_req;
 wire                          p3_req;
 wire                          in_px_state;
 wire                          in_reset_state;
-wire                          phy_clk;
+wire [IO_NUM_LANES-1:0]       phy_clk;
 wire                          phy_clk_en;
 wire                          phy_clk_idle;
-wire                          phy_clk_ready;
-wire                          phy_tx_en;
-wire                          phy_tx_ready;
-wire                          phy_tx_dirdy;
-wire [7:0]                    phy_tx_data;
-wire                          phy_rx_en;    
-wire                          phy_rx_clk;   
-wire                          phy_rx_ready; 
-wire                          phy_rx_valid; 
-wire                          phy_rx_dordy; 
-wire                          phy_rx_align; 
-wire [7:0]                    phy_rx_data;
+wire [IO_NUM_LANES-1:0]       phy_clk_ready;
+wire [IO_NUM_LANES-1:0]       phy_tx_en;
+wire [IO_NUM_LANES-1:0]       phy_tx_ready;
+wire [IO_NUM_LANES-1:0]       phy_tx_dirdy;
+wire [(IO_NUM_LANES*8)-1:0]   phy_tx_data;
+wire [IO_NUM_LANES-1:0]       phy_rx_en;    
+wire [IO_NUM_LANES-1:0]       phy_rx_clk;   
+wire [IO_NUM_LANES-1:0]       phy_rx_ready; 
+wire [IO_NUM_LANES-1:0]       phy_rx_valid; 
+wire [IO_NUM_LANES-1:0]       phy_rx_dordy; 
+wire [IO_NUM_LANES-1:0]       phy_rx_align; 
+wire [(IO_NUM_LANES*8)-1:0]   phy_rx_data;
+
+wire [IO_NUM_LANES-1:0]       slink_tx_clk_lane;
 
 
 wire                          apb_psel_app;    
@@ -265,6 +274,20 @@ slink_reset_sync u_slink_reset_sync_por_reset (
   .reset_out     ( por_reset_refclk_scan    )); 
 
 
+wire  axi_clk_scan;
+wire  axi_reset_scan;
+slink_clock_mux u_slink_clock_mux_axi_clk (
+  .clk0    ( axi_clk          ),     
+  .clk1    ( core_scan_clk    ),     
+  .sel     ( core_scan_mode   ),     
+  .clk_out ( axi_clk_scan     )); 
+
+slink_reset_sync u_slink_reset_sync_axi_reset (
+  .clk           ( axi_clk_scan             ),  
+  .scan_ctrl     ( core_scan_asyncrst_ctrl  ),  
+  .reset_in      ( axi_reset                ),  
+  .reset_out     ( axi_reset_scan           )); 
+
 
 localparam  APB_LINK      = 2'h0,
             APB_LINK_BIST = 2'h1,
@@ -307,7 +330,88 @@ wire  [7:0]   swi_int_ack_id;
 wire  [7:0]   swi_int_nack_id;
 wire  [7:0]   swi_int_data_id;
 wire  [15:0]  swi_int_word_count;
+wire  [23:0]  swi_int_override_muxed;
+wire  [7:0]   swi_gpio_override_muxed;
+wire  [31:0]  swi_int_gpio_enable;
 
+wire    w1c_in_apb_nack_seen;
+wire    w1c_in_apb_nack_sent;
+wire    w1c_in_int_nack_seen;
+wire    w1c_in_int_nack_sent;
+wire    w1c_in_axi_aw_nack_seen ;
+wire    w1c_in_axi_aw_nack_sent ;
+wire    w1c_in_axi_w_nack_seen ;
+wire    w1c_in_axi_w_nack_sent ;
+wire    w1c_in_axi_b_nack_seen ;
+wire    w1c_in_axi_b_nack_sent ;
+wire    w1c_in_axi_ar_nack_seen ;
+wire    w1c_in_axi_ar_nack_sent ;
+wire    w1c_in_axi_r_nack_seen ;
+wire    w1c_in_axi_r_nack_sent ;
+
+wire    w1c_out_apb_nack_seen;
+wire    w1c_out_apb_nack_sent;
+wire    w1c_out_int_nack_seen;
+wire    w1c_out_int_nack_sent;
+wire    w1c_out_axi_aw_nack_seen;
+wire    w1c_out_axi_aw_nack_sent;
+wire    w1c_out_axi_w_nack_seen;
+wire    w1c_out_axi_w_nack_sent;
+wire    w1c_out_axi_b_nack_seen;
+wire    w1c_out_axi_b_nack_sent;
+wire    w1c_out_axi_ar_nack_seen;
+wire    w1c_out_axi_ar_nack_sent;
+wire    w1c_out_axi_r_nack_seen;
+wire    w1c_out_axi_r_nack_sent;
+
+
+
+wire  [4:0]   axi_nack_sent;
+wire  [4:0]   axi_nack_seen;
+wire  [4:0]   axi_tx_fifo_empty;
+wire  [4:0]   axi_rx_fifo_empty;
+
+wire          apb_nack_sent;
+wire          apb_nack_seen;
+wire          apb_invalid_resp_pkt;
+
+wire          int_nack_sent;
+wire          int_nack_seen;
+
+//All NACKs are handled in link clk domain
+slink_sync_pulse u_slink_sync_pulse_nacks[13:0] (
+  .clk_in          ( link_clk                     ),  
+  .clk_in_reset    ( link_reset                   ),  
+  .data_in         ( {apb_nack_seen,
+                      apb_nack_sent,
+                      int_nack_seen,
+                      int_nack_sent,
+                      axi_nack_seen[0],
+                      axi_nack_sent[0],
+                      axi_nack_seen[1],
+                      axi_nack_sent[1],
+                      axi_nack_seen[2],
+                      axi_nack_sent[2],
+                      axi_nack_seen[3],
+                      axi_nack_sent[3],
+                      axi_nack_seen[4],
+                      axi_nack_sent[4]}     ),  
+  .clk_out         ( apb_clk_scan                 ),  
+  .clk_out_reset   ( apb_reset_scan               ),  
+  .data_out        ( {w1c_in_apb_nack_seen,
+                      w1c_in_apb_nack_sent,
+                      w1c_in_int_nack_seen,
+                      w1c_in_int_nack_sent,
+                      w1c_in_axi_aw_nack_seen,
+                      w1c_in_axi_aw_nack_sent,
+                      w1c_in_axi_w_nack_seen,
+                      w1c_in_axi_w_nack_sent,
+                      w1c_in_axi_b_nack_seen,
+                      w1c_in_axi_b_nack_sent,
+                      w1c_in_axi_ar_nack_seen,
+                      w1c_in_axi_ar_nack_sent,
+                      w1c_in_axi_r_nack_seen,
+                      w1c_in_axi_r_nack_sent}     )); 
 
 
 slink_apb_axi_regs_top #(
@@ -319,14 +423,35 @@ slink_apb_axi_regs_top #(
   .swi_axi_app_enable_muxed    ( swi_axi_app_enable_muxed     ),  
   .int_app_enable              ( ~por_reset_refclk_scan       ),  
   .swi_int_app_enable_muxed    ( swi_int_app_enable_muxed     ),  
-  .w1c_in_apb_nack_seen        ( w1c_in_apb_nack_seen         ),  //input -  1                --NEW PORT
-  .w1c_out_apb_nack_seen       ( w1c_out_apb_nack_seen        ),  //output - 1                --NEW PORT
-  .w1c_in_apb_nack_sent        ( w1c_in_apb_nack_sent         ),  //input -  1                --NEW PORT
-  .w1c_out_apb_nack_sent       ( w1c_out_apb_nack_sent        ),  //output - 1                --NEW PORT
-  .w1c_in_int_nack_seen        ( w1c_in_int_nack_seen         ),  //input -  1                --NEW PORT
-  .w1c_out_int_nack_seen       ( w1c_out_int_nack_seen        ),  //output - 1                --NEW PORT
-  .w1c_in_int_nack_sent        ( w1c_in_int_nack_sent         ),  //input -  1                --NEW PORT
-  .w1c_out_int_nack_sent       ( w1c_out_int_nack_sent        ),  //output - 1                --NEW PORT
+  .w1c_in_apb_nack_seen        ( w1c_in_apb_nack_seen         ),  
+  .w1c_out_apb_nack_seen       ( w1c_out_apb_nack_seen        ),  
+  .w1c_in_apb_nack_sent        ( w1c_in_apb_nack_sent         ),  
+  .w1c_out_apb_nack_sent       ( w1c_out_apb_nack_sent        ),  
+  .w1c_in_int_nack_seen        ( w1c_in_int_nack_seen         ),  
+  .w1c_out_int_nack_seen       ( w1c_out_int_nack_seen        ),  
+  .w1c_in_int_nack_sent        ( w1c_in_int_nack_sent         ),  
+  .w1c_out_int_nack_sent       ( w1c_out_int_nack_sent        ),  
+  .w1c_in_axi_aw_nack_seen     ( w1c_in_axi_aw_nack_seen      ),  
+  .w1c_out_axi_aw_nack_seen    ( w1c_out_axi_aw_nack_seen     ),  
+  .w1c_in_axi_aw_nack_sent     ( w1c_in_axi_aw_nack_sent      ),  
+  .w1c_out_axi_aw_nack_sent    ( w1c_out_axi_aw_nack_sent     ),  
+  .w1c_in_axi_w_nack_seen      ( w1c_in_axi_w_nack_seen       ),  
+  .w1c_out_axi_w_nack_seen     ( w1c_out_axi_w_nack_seen      ),  
+  .w1c_in_axi_w_nack_sent      ( w1c_in_axi_w_nack_sent       ),  
+  .w1c_out_axi_w_nack_sent     ( w1c_out_axi_w_nack_sent      ),  
+  .w1c_in_axi_b_nack_seen      ( w1c_in_axi_b_nack_seen       ),  
+  .w1c_out_axi_b_nack_seen     ( w1c_out_axi_b_nack_seen      ),  
+  .w1c_in_axi_b_nack_sent      ( w1c_in_axi_b_nack_sent       ),  
+  .w1c_out_axi_b_nack_sent     ( w1c_out_axi_b_nack_sent      ),  
+  .w1c_in_axi_ar_nack_seen     ( w1c_in_axi_ar_nack_seen      ),  
+  .w1c_out_axi_ar_nack_seen    ( w1c_out_axi_ar_nack_seen     ),  
+  .w1c_in_axi_ar_nack_sent     ( w1c_in_axi_ar_nack_sent      ),  
+  .w1c_out_axi_ar_nack_sent    ( w1c_out_axi_ar_nack_sent     ),  
+  .w1c_in_axi_r_nack_seen      ( w1c_in_axi_r_nack_seen       ),  
+  .w1c_out_axi_r_nack_seen     ( w1c_out_axi_r_nack_seen      ),  
+  .w1c_in_axi_r_nack_sent      ( w1c_in_axi_r_nack_sent       ),  
+  .w1c_out_axi_r_nack_sent     ( w1c_out_axi_r_nack_sent      ),  
+
   .swi_tick_1us                ( swi_tick_1us                 ),  
   .swi_inactivity_count        ( swi_inactivity_count         ),  
   .swi_pstate_req              ( swi_pstate_req               ),  
@@ -341,6 +466,11 @@ slink_apb_axi_regs_top #(
   .swi_int_nack_id             ( swi_int_nack_id              ),  
   .swi_int_data_id             ( swi_int_data_id              ),  
   .swi_int_word_count          ( swi_int_word_count           ),  
+  .int_override                ( i_interrupt                  ), 
+  .swi_int_override_muxed      ( swi_int_override_muxed       ), 
+  .gpio_override               ( i_gpio                       ), 
+  .swi_gpio_override_muxed     ( swi_gpio_override_muxed      ), 
+  .swi_int_gpio_enable         ( swi_int_gpio_enable          ), 
   .debug_bus_ctrl_status       (                              ),  
   .RegReset                    ( apb_reset_scan               ),  
   .RegClk                      ( apb_clk_scan                 ),  
@@ -354,7 +484,21 @@ slink_apb_axi_regs_top #(
   .PRDATA                      ( apb_prdata_app               )); 
 
 
-assign interrupt = link_interrupt;
+assign interrupt = link_interrupt           ||
+                   w1c_out_apb_nack_seen    ||
+                   w1c_out_apb_nack_sent    ||
+                   w1c_out_int_nack_seen    ||
+                   w1c_out_int_nack_sent    ||
+                   w1c_out_axi_aw_nack_seen ||
+                   w1c_out_axi_aw_nack_sent ||
+                   w1c_out_axi_w_nack_seen  ||
+                   w1c_out_axi_w_nack_sent  ||
+                   w1c_out_axi_b_nack_seen  ||
+                   w1c_out_axi_b_nack_sent  ||
+                   w1c_out_axi_ar_nack_seen ||
+                   w1c_out_axi_ar_nack_sent ||
+                   w1c_out_axi_r_nack_seen  ||
+                   w1c_out_axi_r_nack_sent;
 
 
 //----------------------------------
@@ -385,6 +529,9 @@ slink_apb_top #(
   .swi_crack_id        ( swi_apb_crack_id         ),
   .swi_ack_id          ( swi_apb_ack_id           ),
   .swi_nack_id         ( swi_apb_nack_id          ), 
+  .nack_sent           ( apb_nack_sent            ),
+  .nack_seen           ( apb_nack_seen            ),
+  .invalid_resp_pkt    ( apb_invalid_resp_pkt     ),
   .apb_tgt_psel        ( apb_tgt_psel             ),  
   .apb_tgt_penable     ( apb_tgt_penable          ),  
   .apb_tgt_pwrite      ( apb_tgt_pwrite           ),  
@@ -439,34 +586,36 @@ slink_int_gpio_top #(
   .RX_APP_DATA_WIDTH  ( RX_APP_DATA_WIDTH     ),
   .TX_APP_DATA_WIDTH  ( TX_APP_DATA_WIDTH     )
 ) u_slink_int_gpio_top (
-  .app_clk             ( apb_clk_scan             ),              
-  .app_reset           ( apb_reset_scan           ),              
-  .enable              ( swi_int_app_enable_muxed ),              
-  .swi_cr_id           ( swi_int_cr_id            ),   
-  .swi_crack_id        ( swi_int_crack_id         ),   
-  .swi_ack_id          ( swi_int_ack_id           ),   
-  .swi_nack_id         ( swi_int_nack_id          ),   
-  .swi_data_id         ( swi_int_data_id          ),   
-  .swi_word_count      ( swi_int_word_count       ),    
-  .nack_sent           (                          ),  //output - 1              
-  .nack_seen           (                          ),  //output - 1              
-  .i_interrupt         ( i_interrupt              ),  
-  .o_interrupt         ( o_interrupt              ),  
-  .i_gpio              ( i_gpio                   ),  
-  .o_gpio              ( o_gpio                   ),  
-  .link_clk            ( link_clk                 ),           
-  .link_reset          ( link_reset               ),           
-  .tx_sop              ( int_tx_sop               ),  
-  .tx_data_id          ( int_tx_data_id           ),  
-  .tx_word_count       ( int_tx_word_count        ),  
-  .tx_app_data         ( int_tx_app_data          ),        
-  .tx_advance          ( int_tx_advance           ),  
-  .rx_sop              ( int_rx_sop               ),  
-  .rx_data_id          ( int_rx_data_id           ),  
-  .rx_word_count       ( int_rx_word_count        ),  
-  .rx_app_data         ( int_rx_app_data          ),        
-  .rx_valid            ( int_rx_valid             ),  
-  .rx_crc_corrupted    ( int_rx_crc_corrupted     )); 
+  .app_clk             ( apb_clk_scan               ),            
+  .app_reset           ( apb_reset_scan             ),            
+  .enable              ( swi_int_app_enable_muxed   ),            
+  .swi_cr_id           ( swi_int_cr_id              ),   
+  .swi_crack_id        ( swi_int_crack_id           ),   
+  .swi_ack_id          ( swi_int_ack_id             ),   
+  .swi_nack_id         ( swi_int_nack_id            ),   
+  .swi_data_id         ( swi_int_data_id            ),   
+  .swi_word_count      ( swi_int_word_count         ),   
+  .nack_sent           ( int_nack_sent              ),   
+  .nack_seen           ( int_nack_seen              ),   
+  .i_interrupt         ( swi_int_override_muxed &
+                         swi_int_gpio_enable[23:0]  ),      //Need to fix this
+  .o_interrupt         ( o_interrupt                ),  
+  .i_gpio              ( swi_gpio_override_muxed &
+                         swi_int_gpio_enable[31:24] ),      //Need to fix this
+  .o_gpio              ( o_gpio                     ),  
+  .link_clk            ( link_clk                   ),         
+  .link_reset          ( link_reset                 ),         
+  .tx_sop              ( int_tx_sop                 ),  
+  .tx_data_id          ( int_tx_data_id             ),  
+  .tx_word_count       ( int_tx_word_count          ),  
+  .tx_app_data         ( int_tx_app_data            ),       
+  .tx_advance          ( int_tx_advance             ),  
+  .rx_sop              ( int_rx_sop                 ),  
+  .rx_data_id          ( int_rx_data_id             ),  
+  .rx_word_count       ( int_rx_word_count          ),  
+  .rx_app_data         ( int_rx_app_data            ),       
+  .rx_valid            ( int_rx_valid               ),  
+  .rx_crc_corrupted    ( int_rx_crc_corrupted       )); 
 
 
 //----------------------------------
@@ -493,8 +642,8 @@ slink_axi_top #(
   .RX_APP_DATA_WIDTH  ( RX_APP_DATA_WIDTH ),
   .TX_APP_DATA_WIDTH  ( TX_APP_DATA_WIDTH )
 ) u_slink_axi_top (
-  .axi_clk             ( apb_clk_scan             ),  //we tie these together here
-  .axi_reset           ( apb_reset_scan           ),  //we tie these together here
+  .axi_clk             ( axi_clk_scan             ),  
+  .axi_reset           ( axi_reset_scan           ),  
   .tgt_awid            ( axi_tgt_awid             ),  
   .tgt_awaddr          ( axi_tgt_awaddr           ),            
   .tgt_awlen           ( axi_tgt_awlen            ),  
@@ -576,31 +725,35 @@ slink_axi_top #(
   .ini_rvalid          ( axi_ini_rvalid           ),  
   .ini_rready          ( axi_ini_rready           ),  
   .enable              ( swi_axi_app_enable_muxed ),  
-  .swi_aw_cr_id        ( 8'h40                    ),  
-  .swi_aw_crack_id     ( 8'h41                    ),  
-  .swi_aw_ack_id       ( 8'h42                    ),  
-  .swi_aw_nack_id      ( 8'h43                    ),  
-  .swi_aw_data_id      ( 8'h44                    ),  
-  .swi_w_cr_id         ( 8'h45                    ),  
-  .swi_w_crack_id      ( 8'h46                    ),  
-  .swi_w_ack_id        ( 8'h47                    ),  
-  .swi_w_nack_id       ( 8'h48                    ),  
-  .swi_w_data_id       ( 8'h49                    ),  
-  .swi_b_cr_id         ( 8'h4a                    ),  
-  .swi_b_crack_id      ( 8'h4b                    ),  
-  .swi_b_ack_id        ( 8'h4c                    ),  
-  .swi_b_nack_id       ( 8'h4d                    ),  
-  .swi_b_data_id       ( 8'h4e                    ),  
-  .swi_ar_cr_id        ( 8'h50                    ),  
-  .swi_ar_crack_id     ( 8'h51                    ),  
-  .swi_ar_ack_id       ( 8'h52                    ),  
-  .swi_ar_nack_id      ( 8'h53                    ),  
-  .swi_ar_data_id      ( 8'h54                    ),  
-  .swi_r_cr_id         ( 8'h55                    ),  
-  .swi_r_crack_id      ( 8'h56                    ),  
-  .swi_r_ack_id        ( 8'h57                    ),  
-  .swi_r_nack_id       ( 8'h58                    ),  
-  .swi_r_data_id       ( 8'h59                    ),  
+  .swi_aw_cr_id        ( 8'h10                    ),  
+  .swi_aw_crack_id     ( 8'h11                    ),  
+  .swi_aw_ack_id       ( 8'h12                    ),  
+  .swi_aw_nack_id      ( 8'h13                    ),  
+  .swi_aw_data_id      ( 8'h40                    ),  
+  .swi_w_cr_id         ( 8'h14                    ),  
+  .swi_w_crack_id      ( 8'h15                    ),  
+  .swi_w_ack_id        ( 8'h16                    ),  
+  .swi_w_nack_id       ( 8'h17                    ),  
+  .swi_w_data_id       ( 8'h41                    ),  
+  .swi_b_cr_id         ( 8'h18                    ),  
+  .swi_b_crack_id      ( 8'h19                    ),  
+  .swi_b_ack_id        ( 8'h1a                    ),  
+  .swi_b_nack_id       ( 8'h1b                    ),  
+  .swi_b_data_id       ( 8'h42                    ),  
+  .swi_ar_cr_id        ( 8'h1c                    ),  
+  .swi_ar_crack_id     ( 8'h1d                    ),  
+  .swi_ar_ack_id       ( 8'h1e                    ),  
+  .swi_ar_nack_id      ( 8'h1f                    ),  
+  .swi_ar_data_id      ( 8'h43                    ),  
+  .swi_r_cr_id         ( 8'h20                    ),  
+  .swi_r_crack_id      ( 8'h21                    ),  
+  .swi_r_ack_id        ( 8'h22                    ),  
+  .swi_r_nack_id       ( 8'h23                    ),  
+  .swi_r_data_id       ( 8'h44                    ),  
+  .nack_sent           ( axi_nack_sent            ),
+  .nack_seen           ( axi_nack_seen            ),
+  .tx_fifo_empty       ( axi_tx_fifo_empty        ),
+  .rx_fifo_empty       ( axi_rx_fifo_empty        ),
   .link_clk            ( link_clk                 ),  
   .link_reset          ( link_reset               ),  
   .tx_sop              ( axi_tx_sop               ),  
@@ -661,18 +814,18 @@ slink_generic_rx_router #(
   .rx_app_data         ( rx_app_data              ),             
   .rx_valid            ( rx_valid                 ),  
   .rx_crc_corrupted    ( rx_crc_corrupted         ),  
-  .swi_ch_sp_min       ( {8'h10,
-                          8'h10,
+  .swi_ch_sp_min       ( {8'h0c,
+                          8'h08,
                           8'h10}                  ),  //input -  [(NUM_CHANNELS*8)-1:0]      
-  .swi_ch_sp_max       ( {8'h10,
-                          8'h10,
-                          8'h10}                  ),  //input -  [(NUM_CHANNELS*8)-1:0]      
-  .swi_ch_lp_min       ( {8'h30,
-                          8'h20,
+  .swi_ch_sp_max       ( {8'h0f,
+                          8'h0b,
+                          8'h23}                  ),  //input -  [(NUM_CHANNELS*8)-1:0]      
+  .swi_ch_lp_min       ( {8'h50,
+                          8'h30,
                           8'h40}                  ),  //input -  [(NUM_CHANNELS*8)-1:0]      
-  .swi_ch_lp_max       ( {8'h3f,
-                          8'h2f,
-                          8'h5f}                  ),  //input -  [(NUM_CHANNELS*8)-1:0]      
+  .swi_ch_lp_max       ( {8'h50,
+                          8'h33,
+                          8'h44}                  ),  //input -  [(NUM_CHANNELS*8)-1:0]      
   .rx_sop_ch           ( {int_rx_sop,
                           apb_rx_sop,
                           axi_rx_sop}             ),  
@@ -715,10 +868,11 @@ slink_generic_pstate_ctrl u_slink_generic_pstate_ctrl (
 slink #(
   //parameters
   .DESKEW_FIFO_DEPTH     ( 4                       ),
+  .RETIME_FIFO_DEPTH     ( RETIME_FIFO_DEPTH       ),
   .INCLUDE_BIST          ( 1                       ),
   .LTSSM_REGISTER_TXDATA ( 0                       ),
-  .NUM_RX_LANES          ( 1                       ),
-  .NUM_TX_LANES          ( 1                       ),
+  .NUM_RX_LANES          ( IO_NUM_LANES            ),
+  .NUM_TX_LANES          ( IO_NUM_LANES            ),
   .P1_TS1_RX_RESET       ( 1                       ),
   .P1_TS1_TX_RESET       ( 1                       ),
   .P1_TS2_RX_RESET       ( 1                       ),
@@ -735,7 +889,7 @@ slink #(
   .PX_CLK_TRAIL_RESET    ( 16                      ),
   .RX_APP_DATA_WIDTH     ( RX_APP_DATA_WIDTH       ),
   .START_IN_ONE_LANE     ( 1                       ),
-  .SYNC_FREQ_RESET       ( 8                       ),
+  .SYNC_FREQ_RESET       ( 7                       ),
   .TX_APP_DATA_WIDTH     ( TX_APP_DATA_WIDTH       )
 ) u_slink (
   .core_scan_mode              ( core_scan_mode               ), 
@@ -777,19 +931,19 @@ slink #(
   .slink_gpio_wake_n_oen       ( slink_gpio_wake_n_oen        ),  
   .slink_gpio_wake_n           ( slink_gpio_wake_n            ),  
   .refclk                      ( refclk_scan                  ),  
-  .phy_clk                     ( phy_clk                      ),  
+  .phy_clk                     ( phy_clk[0]                   ),  
   .phy_clk_en                  ( phy_clk_en                   ),  
   .phy_clk_idle                ( phy_clk_idle                 ),  
-  .phy_clk_ready               ( phy_clk_ready                ),  
+  .phy_clk_ready               ( phy_clk_ready[0]             ),  
   .phy_tx_en                   ( phy_tx_en                    ),  
   .phy_tx_ready                ( phy_tx_ready                 ),  
-  .phy_tx_dirdy                ( 1'b1                         ),  
+  .phy_tx_dirdy                ( {IO_NUM_LANES{1'b1}}         ),  
   .phy_tx_data                 ( phy_tx_data                  ),             
   .phy_rx_en                   ( phy_rx_en                    ),  
   .phy_rx_clk                  ( phy_rx_clk                   ),  
   .phy_rx_ready                ( phy_rx_ready                 ),  
   .phy_rx_valid                ( phy_rx_valid                 ),  
-  .phy_rx_dordy                ( 1'b1                         ),  
+  .phy_rx_dordy                ( {IO_NUM_LANES{1'b1}}         ),  
   .phy_rx_align                ( phy_rx_align                 ),  
   .phy_rx_data                 ( phy_rx_data                  )); 
 
@@ -797,21 +951,27 @@ slink #(
 assign phy_rx_clk = phy_clk;
 
 wire  slink_base_serial_clk;  
-generate
-  if(IS_HOST) begin
-    slink_clock_mux u_slink_clock_mux_highspeed_clock (
-      .clk0    ( hsclk                  ),     
-      .clk1    ( core_scan_clk          ),     
-      .sel     ( core_scan_mode         ),     
-      .clk_out ( slink_base_serial_clk  )); 
-  end else begin
-    slink_clock_mux u_slink_clock_mux_highspeed_clock (
-      .clk0    ( slink_rx_clk           ),     
-      .clk1    ( core_scan_clk          ),     
-      .sel     ( core_scan_mode         ),     
-      .clk_out ( slink_base_serial_clk  )); 
-  end
-endgenerate
+// generate
+//   if(IS_HOST) begin
+//     slink_clock_mux u_slink_clock_mux_highspeed_clock (
+//       .clk0    ( hsclk                  ),     
+//       .clk1    ( core_scan_clk          ),     
+//       .sel     ( core_scan_mode         ),     
+//       .clk_out ( slink_base_serial_clk  )); 
+//   end else begin
+//     slink_clock_mux u_slink_clock_mux_highspeed_clock (
+//       .clk0    ( slink_rx_clk           ),     
+//       .clk1    ( core_scan_clk          ),     
+//       .sel     ( core_scan_mode         ),     
+//       .clk_out ( slink_base_serial_clk  )); 
+//   end
+// endgenerate
+
+slink_clock_mux u_slink_clock_mux_highspeed_clock (
+  .clk0    ( hsclk                  ),     
+  .clk1    ( core_scan_clk          ),     
+  .sel     ( core_scan_mode         ),     
+  .clk_out ( slink_base_serial_clk  )); 
 
 
 wire por_reset_serial_clk;
@@ -824,9 +984,8 @@ slink_reset_sync u_slink_reset_sync_hs_clk_porreset (
 slink_gpio_serdes #(
   //parameters
   .IO_DATA_WIDTH      ( IO_DATA_WIDTH ),
-  .IS_MASTER          ( IS_HOST       ),
   .PAR_DATA_WIDTH     ( 8             )
-) u_slink_gpio_serdes (
+) u_slink_gpio_serdes[IO_NUM_LANES-1:0] (
   .core_scan_mode    ( core_scan_mode         ),  
   .core_scan_clk     ( core_scan_clk          ),
   .serial_clk        ( slink_base_serial_clk  ),  
@@ -841,8 +1000,10 @@ slink_gpio_serdes #(
   .rx_en             ( phy_rx_en              ),  
   .rx_ready          ( phy_rx_ready           ),  
   .rx_par_data       ( phy_rx_data            ),  
-  .tx_ser_clk        ( slink_tx_clk           ), 
+  .tx_ser_clk        ( slink_tx_clk_lane      ), 
   .tx_ser_data       ( slink_tx_data          ),    
   .rx_ser_data       ( slink_rx_data          ));
+
+assign slink_tx_clk = slink_tx_clk_lane[0];
 
 endmodule

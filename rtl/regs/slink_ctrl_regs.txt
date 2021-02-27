@@ -44,7 +44,10 @@ ERROR_CONTROL                       RW
 
 COUNT_VAL_1US                       RW
   count_val_1us                     10'd38                  Number of REFCLK cycles that equal 1us.
-  
+
+
+SHORT_PACKET_MAX                    RW
+  short_packet_max                  8'h2f                   This setting allows you to change the window for short/long packets
 
 ######################
 # Attribute Override

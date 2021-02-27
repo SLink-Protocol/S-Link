@@ -10,6 +10,8 @@ module slink_ll_tx #(
   input  wire                                 reset,
   input  wire                                 enable,
   
+  input  wire [7:0]                           swi_short_packet_max,
+  
   //Interface to App
   input  wire                                 sop,
   input  wire [7:0]                           data_id,
@@ -61,6 +63,8 @@ reg                                       advance_in;
 reg   [15:0]                              word_count_reg, word_count_reg_in;
 reg   [7:0]                               data_id_reg, data_id_reg_in;
 wire                                      is_short_pkt;
+reg                                       is_short_pkt_reg;
+reg                                       is_short_pkt_reg_in;
 
 
 reg                                           crc_init;
@@ -88,6 +92,7 @@ always @(posedge clk or posedge reset) begin
     delim_count         <= 'd0;
     app_data_saved      <= {APP_DATA_SAVED_SIZE{1'b0}};
     advance_prev        <= 1'b0;
+    is_short_pkt_reg    <= 1'b0;
   end else begin
     state               <= nstate;
     link_data_reg       <= link_data_reg_in;
@@ -97,12 +102,41 @@ always @(posedge clk or posedge reset) begin
     delim_count         <= delim_count_in;
     app_data_saved      <= app_data_saved_in;
     advance_prev        <= ~ll_tx_valid ? advance_prev : advance; //need to save this if we don't have a valid data cycle
+    is_short_pkt_reg    <= is_short_pkt_reg_in;
   end
 end
 
+//Error injection for sims
+`ifndef SYNTHESIS
+reg ecc_error_injected,   ecc_error_injected_in;
+reg crc_error_injected,   crc_error_injected_in;
+int ecc_bit_error1;
+int ecc_bit_error2;
+int crc_bit_error;
+int error_wait_count;
+int error_wait_count_pa;
+always @(posedge clk or posedge reset) begin
+  if(reset) begin
+    ecc_error_injected  <= 0;
+    crc_error_injected  <= 0;
+  end else begin
+    ecc_error_injected  <= ecc_error_injected_in;
+    crc_error_injected  <= crc_error_injected_in;
+  end
+end
+
+initial begin
+  if($value$plusargs("SLINK_ERR_WAIT_COUNT=%d", error_wait_count_pa)) begin
+  end else begin
+    error_wait_count_pa = 50; //every 50 packets
+  end
+end
+
+`endif
+
 assign ll_tx_state        = state;
 
-assign is_short_pkt       = data_id <= 8'h1f;
+assign is_short_pkt       = data_id <= swi_short_packet_max;
 
 //Delimeter is used to force packets to start when each LANE has sent 32bits.
 //This combats vaious lane widths (8/16/32) without the need to have some complicated scheme.
@@ -126,6 +160,13 @@ always @(*) begin
   app_data_saved_in       = app_data_saved;
   crc_input               = {(NUM_LANES * DATA_WIDTH){1'b0}};
   link_idle               = 1'b0;
+  is_short_pkt_reg_in     = is_short_pkt_reg;
+  
+  
+  `ifndef SYNTHESIS
+  ecc_error_injected_in   = ecc_error_injected;
+  crc_error_injected_in   = crc_error_injected;
+  `endif
   
   case(state)
     //-------------------------------------------
@@ -247,6 +288,7 @@ always @(*) begin
           word_count_reg_in             = word_count;
           crc_init                      = 1'b1;
           packet_header_syn_in          = {word_count_reg_in, data_id_reg_in};
+          is_short_pkt_reg_in           = is_short_pkt;
 
           case(active_lanes)
             ONE_LANE : begin
@@ -869,14 +911,14 @@ always @(*) begin
             if(DATA_WIDTH==8) begin
               link_data_reg_in  = {{(NUM_LANES-1)*(DATA_WIDTH){1'b0}}, word_count[15: 8]};
               nstate            = HEADER_ECC;
-              advance_in        = is_short_pkt;
+              advance_in        = is_short_pkt_reg;
             end
 
 
             if(DATA_WIDTH==16) begin
               link_data_reg_in  = {{(NUM_LANES-1)*(DATA_WIDTH){1'b0}}, calculated_ecc, word_count[15: 8]};
-              nstate            = is_short_pkt ? IDLE : LONG_DATA;
-              advance_in        = is_short_pkt;
+              nstate            = is_short_pkt_reg ? IDLE : LONG_DATA;
+              advance_in        = is_short_pkt_reg;
               byte_count_in     = 'd0;
             end
           end
@@ -885,8 +927,8 @@ always @(*) begin
             if(NUM_LANES >= 2) begin
               if(DATA_WIDTH==8) begin
                 link_data_reg_in  = {{(NUM_LANES-2)*(DATA_WIDTH){1'b0}}, calculated_ecc, word_count[15: 8]};
-                nstate            = is_short_pkt ? IDLE : LONG_DATA;
-                advance_in        = is_short_pkt;
+                nstate            = is_short_pkt_reg ? IDLE : LONG_DATA;
+                advance_in        = is_short_pkt_reg;
                 byte_count_in     = 'd0;
               end
             end
@@ -902,8 +944,9 @@ always @(*) begin
       if(ll_tx_valid) begin
         if(DATA_WIDTH==8) begin
           link_data_reg_in      = {{(NUM_LANES-1)*(DATA_WIDTH){1'b0}}, calculated_ecc};
-          nstate                = is_short_pkt ? IDLE : (~(|word_count_reg) ? CRC0 : LONG_DATA);
-          advance_in            = word_count_reg == 'd0;
+          nstate                = is_short_pkt_reg ? IDLE : (~(|word_count_reg) ? CRC0 : LONG_DATA);
+          //advance_in            = word_count_reg == 'd0;
+          advance_in            = 1'b0; //done in WC1
           byte_count_in         = 'd0;
         end
       end
@@ -1714,6 +1757,73 @@ always @(*) begin
   if(~enable) begin
     nstate                = WAIT_SDS;
   end
+  
+  //If data is X this can cause the CRC to prop X, resulting in CRCs
+  //failing, so add this to force the X to something
+  `ifndef SYNTHESIS
+  for(int jj=0; jj<(NUM_LANES * DATA_WIDTH); jj++) begin
+    if(crc_input[jj] === 1'bx) begin
+      crc_input[jj] = 1'b0;
+    end
+    if(link_data_reg_in[jj] === 1'bx) begin
+      link_data_reg_in[jj] = 1'b0;
+    end
+  end
+  
+  //ECC injection
+  if($value$plusargs("SLINK_ECC_BIT_ERR1=%d", ecc_bit_error1)) begin
+    if(~ecc_error_injected) begin
+      case(ecc_bit_error1)
+        0,1,2,3,4,5,6,7 : begin
+          case(active_lanes)
+            ONE_LANE : begin
+              if(state==IDLE && nstate==HEADER_WC0) begin
+                if(error_wait_count < error_wait_count_pa) begin
+                  error_wait_count++;
+                end else begin
+                  for(int jj=0; jj<8; jj++) begin
+                    if(jj==ecc_bit_error1) begin
+                      link_data_reg_in[jj]  = ~link_data_reg_in[jj];
+                      ecc_error_injected_in = 1;
+                      error_wait_count      = 0;
+                    end
+                  end
+                end
+              end
+            end
+          endcase
+        end
+      endcase
+    end 
+  end
+  
+  //ECC injection
+  if($value$plusargs("SLINK_CRC_BIT_ERR=%d", crc_bit_error)) begin
+    if(~crc_error_injected) begin
+      case(crc_bit_error)
+        0,1,2,3,4,5,6,7 : begin
+          case(active_lanes)
+            ONE_LANE : begin
+              if(state==CRC0 && nstate==CRC1) begin
+                if(error_wait_count < error_wait_count_pa) begin
+                  error_wait_count++;
+                end else begin
+                  for(int jj=0; jj<8; jj++) begin
+                    if(jj==crc_bit_error) begin
+                      link_data_reg_in[jj]  = ~link_data_reg_in[jj];
+                      crc_error_injected_in = 0;  //temp
+                      error_wait_count      = 0;
+                    end
+                  end
+                end
+              end
+            end
+          endcase
+        end
+      endcase
+    end
+  end
+  `endif
 end
 
 
