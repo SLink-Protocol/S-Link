@@ -81,7 +81,7 @@ generate
       always @(posedge clk or posedge reset) begin
         if(reset) begin
           data_fifo[laneindex][fifoindex]       <= 'd0;
-          fifo_ptr[laneindex]                   <= 'd0;
+          //fifo_ptr[laneindex]                   <= 'd0;
         end else begin
           if(fifoindex == 0) begin
             data_fifo[laneindex][fifoindex]     <= lane_active[laneindex] && enable && rx_locked[laneindex] ? {rx_data_valid_in[laneindex], 
@@ -92,12 +92,23 @@ generate
             data_fifo[laneindex][fifoindex]     <= lane_active[laneindex] && enable && rx_locked[laneindex] ? data_fifo[laneindex][fifoindex-1] : 'd0;
           end
           
-          fifo_ptr[laneindex]                   <=  (state == IDLE)   ? {FIFO_CLOG2+1{1'b0}} : 
-                                                    (state == TRAIN)  ? fifo_ptr_in[laneindex] : fifo_ptr[laneindex];
+          //fifo_ptr[laneindex]                   <=  (state == IDLE)   ? {FIFO_CLOG2+1{1'b0}} : 
+          //                                          (state == TRAIN)  ? fifo_ptr_in[laneindex] : fifo_ptr[laneindex];
         end
       end
                        
     end 
+    
+    
+    always @(posedge clk or posedge reset) begin
+      if(reset) begin
+        fifo_ptr[laneindex]                   <= 'd0;
+      end else begin
+        fifo_ptr[laneindex]                   <=  (state == IDLE)   ? {FIFO_CLOG2+1{1'b0}} : 
+                                                  (state == TRAIN)  ? fifo_ptr_in[laneindex] : fifo_ptr[laneindex];
+      end
+    end
+    
     
     //Make this up to 16 entries?
     //Figure out a way to incorporate in the generate loop

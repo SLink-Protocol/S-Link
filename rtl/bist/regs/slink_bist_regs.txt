@@ -1,0 +1,28 @@
+SWRESET                     RW
+  swreset                   1'b1              Main software reset for BIST logic
+
+BIST_MAIN_CONTROL           RW
+  bist_tx_en                1'b0              Main Enable for TX. Controls clock gate for BIST logic
+  bist_rx_en                1'b0              Main Enable for RX. Controls clock gate for BIST logic
+  bist_reset                1'b0              Reset for clearing BIST error counters
+  bist_active               1'b0              Signal exits the BIST block and can be used to control an external mux for data path.
+  disable_clkgate           1'b0
+
+BIST_MODE                   RW
+  bist_mode_payload         4'h0              Denotes long data payload type. 0 - 1010, 1 - 1100, 2 - 1111_0000, 8 - counter, 9 - PRBS9
+  bist_mode_wc              1'b0              0 - Always use fixed word count (wc_min). 1 - Cycle through word counts (min -> max back to min)
+  bist_mode_di              1'b0              0 - Always use fixed data id (di_min). 1 - Cycle through data id (min -> max back to min)
+
+BIST_WORD_COUNT_VALUES      RW
+  bist_wc_min               16'd10            Minimum number of bytes in payload
+  bist_wc_max               16'd100           Maximum number of bytes in payload
+
+BIST_DATA_ID_VALUES         RW
+  bist_di_min               8'h20             Minimum Data ID Value
+  bist_di_max               8'hf0             Maximum Data ID Value
+
+BIST_STATUS                 RO
+  bist_locked               1'b0              1 - BIST RX has seen at least one start of packet and word count has not had an issue
+  bist_unrecover            1'b0              1 - BIST RX has received data in such a way that the remaining data stream is not likely to be observable.
+  reserved                  14'd0
+  bist_errors               16'd0             Number of errors seen during this run. Saturates at all ones.

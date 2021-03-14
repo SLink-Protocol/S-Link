@@ -1,0 +1,37 @@
+# <REG_NAME> <type RW|RO> <addr> <description>
+# <bit field> <size> <lsb location> <reset_val> <type(for RW/RO embed)> <description>
+SLINK_BIST_SWRESET RW 'h0 <DESC><\DESC> 
+SWRESET 1 0 1'h1 RW <DESC>Main software reset for BIST logic<\DESC>
+
+SLINK_BIST_BIST_MAIN_CONTROL RW 'h4 <DESC><\DESC> 
+DISABLE_CLKGATE 1 4 1'h0 RW <DESC><\DESC>
+BIST_ACTIVE 1 3 1'h0 RW <DESC>Signal exits the BIST block and can be used to control an external mux for data path.<\DESC>
+BIST_RESET 1 2 1'h0 RW <DESC>Reset for clearing BIST error counters<\DESC>
+BIST_RX_EN 1 1 1'h0 RW <DESC>Main Enable for RX. Controls clock gate for BIST logic<\DESC>
+BIST_TX_EN 1 0 1'h0 RW <DESC>Main Enable for TX. Controls clock gate for BIST logic<\DESC>
+
+SLINK_BIST_BIST_MODE RW 'h8 <DESC><\DESC> 
+BIST_MODE_DI 1 5 1'h0 RW <DESC>0 - Always use fixed data id (di_min). 1 - Cycle through data id (min -> max back to min)<\DESC>
+BIST_MODE_WC 1 4 1'h0 RW <DESC>0 - Always use fixed word count (wc_min). 1 - Cycle through word counts (min -> max back to min)<\DESC>
+BIST_MODE_PAYLOAD 4 0 4'h0 RW <DESC>Denotes long data payload type. 0 - 1010, 1 - 1100, 2 - 1111_0000, 8 - counter, 9 - PRBS9<\DESC>
+
+SLINK_BIST_BIST_WORD_COUNT_VALUES RW 'hc <DESC><\DESC> 
+BIST_WC_MAX 16 16 16'h64 RW <DESC>Maximum number of bytes in payload<\DESC>
+BIST_WC_MIN 16 0 16'ha RW <DESC>Minimum number of bytes in payload<\DESC>
+
+SLINK_BIST_BIST_DATA_ID_VALUES RW 'h10 <DESC><\DESC> 
+BIST_DI_MAX 8 8 8'hf0 RW <DESC>Maximum Data ID Value<\DESC>
+BIST_DI_MIN 8 0 8'h20 RW <DESC>Minimum Data ID Value<\DESC>
+
+SLINK_BIST_BIST_STATUS RO 'h14 <DESC><\DESC> 
+BIST_ERRORS 16 16 16'h0 RO <DESC>Number of errors seen during this run. Saturates at all ones.<\DESC>
+RESERVED0 14 2 14'h0 RO <DESC><\DESC>
+BIST_UNRECOVER 1 1 1'h0 RO <DESC>1 - BIST RX has received data in such a way that the remaining data stream is not likely to be observable.<\DESC>
+BIST_LOCKED 1 0 1'h0 RO <DESC>1 - BIST RX has seen at least one start of packet and word count has not had an issue<\DESC>
+
+SLINK_BIST_DEBUG_BUS_CTRL RW 'h18 <DESC>Debug observation bus selection for signals that have a mux override<\DESC> 
+DEBUG_BUS_CTRL_SEL 1 0 1'h0 RW <DESC>Select signal for DEBUG_BUS_CTRL<\DESC>
+
+SLINK_BIST_DEBUG_BUS_STATUS RO 'h1c <DESC>Debug observation bus for signals that have a mux override<\DESC> 
+DEBUG_BUS_CTRL_STATUS 32 0 32'h0 RO <DESC>Status output for DEBUG_BUS_STATUS<\DESC>
+

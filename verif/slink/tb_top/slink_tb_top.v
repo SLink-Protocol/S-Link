@@ -119,10 +119,18 @@ new changes and most users of S-Link shouldn't have to run them.
 
 module tb_top;
 
+//Parameters/Defines for config
+`include "slink_cfg_params.vh"
+
 `include "slink_msg.v"
 `include "slink_tests.vh"
 
+//Usually shared
 `include "slink_inst.vh"
+
+//Per TB
+`include "slink_drivers_inst.vh"
+
 
 initial begin  
   #1ps;
@@ -138,6 +146,17 @@ initial begin
 end
 
 
+initial begin
+  if($test$plusargs("NO_WAVES")) begin
+    `sim_info($display("No waveform saving this sim"))
+  end else begin
+    $dumpvars(0);
+    
+  end
+  #1ms;
+  `sim_fatal($display("sim timeout"));
+  $finish();
+end
 
 
 endmodule

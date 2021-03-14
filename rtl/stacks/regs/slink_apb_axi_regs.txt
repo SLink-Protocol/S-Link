@@ -1,0 +1,88 @@
+#################################
+# Enables
+#################################
+APB_APP_ENABLE            RW
+  apb_app_enable          1'b0                Enables the APB Application Layer    
+  apb_app_enable_mux      1'b0                1 - Use regsiter, 0 - use external logic
+
+AXI_APP_ENABLE            RW
+  axi_app_enable          1'b0                Enables the AXI Application Layer
+  axi_app_enable_mux      1'b0                1 - Use regsiter, 0 - use external logic
+
+INT_APP_ENABLE            RW
+  int_app_enable          1'b0                Enables the Interrupt/GPIO Application Layer
+  int_app_enable_mux      1'b0                1 - Use regsiter, 0 - use external logic
+
+
+
+#################################
+# Interrupts / Status
+#################################
+INTERRUPT_STATUS          RW
+  apb_nack_seen           1'b0        W1C     APB Nack has been seen on this application layer (far-end saw an issue)
+  apb_nack_sent           1'b0        W1C     APB Nack has been sent from this application layer (near-end saw an issue)
+  int_nack_seen           1'b0        W1C     INT Nack has been seen on this application layer (far-end saw an issue)
+  int_nack_sent           1'b0        W1C     INT Nack has been sent from this application layer (near-end saw an issue)
+  axi_aw_nack_seen        1'b0        W1C     AXI AW Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_aw_nack_sent        1'b0        W1C     AXI AW Channel Nack has been sent from this application layer (near-end saw an issue)
+  axi_w_nack_seen         1'b0        W1C     AXI W  Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_w_nack_sent         1'b0        W1C     AXI W  Channel Nack has been sent from this application layer (near-end saw an issue)
+  axi_b_nack_seen         1'b0        W1C     AXI B  Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_b_nack_sent         1'b0        W1C     AXI B  Channel Nack has been sent from this application layer (near-end saw an issue)
+  axi_ar_nack_seen        1'b0        W1C     AXI AR Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_ar_nack_sent        1'b0        W1C     AXI AR Channel Nack has been sent from this application layer (near-end saw an issue)
+  axi_r_nack_seen         1'b0        W1C     AXI R  Channel Nack has been seen on this application layer (far-end saw an issue)
+  axi_r_nack_sent         1'b0        W1C     AXI R  Channel Nack has been sent from this application layer (near-end saw an issue)
+
+#################################
+# PSTATE Controls
+#################################
+PSTATE_CONTROL            RW
+  tick_1us                8'd39               Number of refclk cycles to equal 1us
+  inactivity_count        8'd5                Number of microseconds before starting a PState transition
+  pstate_req              3'd2                PState to transition to. If multiple bits are set, the lowest is used. [0] - P1, [1] - P2, [2] - P3.
+  pstate_ctrl_enable      1'PAR:'b1           Enables the PSTATE Controller
+
+
+
+#################################
+# Application Layer IDs
+#
+#################################
+
+
+#################################
+# APB APP
+#################################
+APB_APP_CREDIT_IDS        RW
+  apb_cr_id               8'h08               Credit Request Data ID for APB Application Channel
+  apb_crack_id            8'h09               Credit Request Data Acknowledgement ID for APB Application Channel
+  apb_ack_id              8'h0a               Acknowledgement ID for APB Application Channel
+  apb_nack_id             8'h0b               Non-Acknowledgement ID for APB Application Channel
+
+
+
+#################################
+# INT APP
+#################################
+INT_APP_CREDIT_IDS        RW
+  int_cr_id               8'h0c               Credit Request Data ID for INT Application Channel
+  int_crack_id            8'h0d               Credit Request Data Acknowledgement ID for INT Application Channel
+  int_ack_id              8'h0e               Acknowledgement ID for INT Application Channel
+  int_nack_id             8'h0f               Non-Acknowledgement ID for INT Application Channel
+
+
+INT_APP_PKT_ID_WC         RW
+  int_data_id             8'h50               INT Data ID
+  int_word_count          16'd3               INT Word Count
+
+INT_OVERRIDES             RW
+  int_override            24'd0
+  int_override_mux        1'b0
+
+GPIO_OVERRIDES            RW
+  gpio_override           8'd0
+  gpio_override_mux       1'b0
+
+INT_GPIO_ENABLE           RW
+  int_gpio_enable         32'hffffffff        Allows user to gate the Interrupts/GPIO signals in the event of a spurrious signal

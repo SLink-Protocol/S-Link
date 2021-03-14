@@ -189,27 +189,28 @@ always @(*) begin
           
           case(swi_bist_mode_payload)
             BIST_PAYLOAD_1010 : begin
-              for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count_save); i = i + 1) begin
+              for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count/*word_count_save*/); i = i + 1) begin
                 app_data_xor[(i*8) +: 8] = 8'haa ^ app_data[(i*8) +: 8];
               end
             end
             BIST_PAYLOAD_1100 : begin
-              for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count_save); i = i + 1) begin
+              for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count/*word_count_save*/); i = i + 1) begin
                 app_data_xor[(i*8) +: 8] = 8'hcc ^ app_data[(i*8) +: 8];
               end
             end
             BIST_PAYLOAD_1111_0000 : begin
-              for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count_save); i = i + 1) begin
+              for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count/*word_count_save*/); i = i + 1) begin
                 app_data_xor[(i*8) +: 8] = 8'hf0 ^ app_data[(i*8) +: 8];
               end
             end
             BIST_PAYLOAD_COUNT : begin
-              for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count_save); i = i + 1) begin
-                app_data_xor[(i*8) +: 8] = (byte_count + i) ^ app_data[(i*8) +: 8];
+              for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count/*word_count_save*/); i = i + 1) begin
+                //app_data_xor[(i*8) +: 8] = (byte_count + i) ^ app_data[(i*8) +: 8];
+                app_data_xor[(i*8) +: 8] =  i ^ app_data[(i*8) +: 8];
               end
             end
             default : begin
-            for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count_save); i = i + 1) begin
+            for(int i = 0; (i < APP_DATA_BYTES) && ((i + byte_count) < word_count/*word_count_save*/); i = i + 1) begin
               app_data_xor[(i*8) +: 8] = 8'hd0 ^ app_data[(i*8) +: 8];
             end
           end
@@ -243,6 +244,10 @@ always @(*) begin
       nstate  = IDLE;
     end
   endcase
+  
+  if(~bist_en_ff2 || bist_reset_ff2) begin
+    nstate    = IDLE;
+  end
 end
 
 endmodule

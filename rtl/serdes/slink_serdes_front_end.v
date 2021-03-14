@@ -6,8 +6,10 @@ module slink_serdes_front_end #(
   parameter LTSSM_REGISTER_TXDATA = 1,
   
   parameter DESKEW_FIFO_DEPTH     = 4,  
+  parameter RETIME_FIFO_DEPTH     = 0,
   
   //Attribute
+  parameter START_IN_ONE_LANE     = 0,
   parameter P1_TS1_TX_RESET       = 16, 
   parameter P1_TS1_RX_RESET       = 8,  
   parameter P1_TS2_TX_RESET       = 8,  
@@ -23,6 +25,7 @@ module slink_serdes_front_end #(
   parameter P3R_TS2_TX_RESET      = 8,  
   parameter P3R_TS2_RX_RESET      = 8,  
   
+  parameter PX_CLK_TRAIL_RESET    = 32,
   parameter SYNC_FREQ_RESET       = 15  
 )(
   
@@ -82,6 +85,8 @@ module slink_serdes_front_end #(
   output wire [(NUM_RX_LANES*
                 PHY_DATA_WIDTH)-1:0]  ll_rx_data,
   output wire                         ll_rx_sds_recv,
+  
+  output wire [4:0]                   ltssm_state,
   
   
   // PHY
@@ -237,7 +242,8 @@ slink_rx_align_deskew #(
   //parameters
   .FIFO_DEPTH         ( DESKEW_FIFO_DEPTH ),
   .NUM_LANES          ( NUM_RX_LANES      ),
-  .DATA_WIDTH         ( PHY_DATA_WIDTH    )
+  .DATA_WIDTH         ( PHY_DATA_WIDTH    ),
+  .RETIME_FIFO_DEPTH  ( RETIME_FIFO_DEPTH )
 ) u_slink_rx_align_deskew (
   .clk                 ( link_clk                 ),  
   .reset               ( link_clk_reset           ),  
@@ -265,7 +271,7 @@ slink_rx_align_deskew #(
   .attr_update         ( link_attr_shadow_update  ),
   .attr_rd_req         (                          ),
   
-  .deskew_state        ( deskew_state             )); 
+  .deskew_state        (               )); 
 
 
 wire [15:0]   sw_attr_rdata_fe_fifo;     
@@ -331,8 +337,24 @@ slink_attr_ctrl #(
 assign sw_attr_data_read  = sw_attr_local ? sw_attr_rdata_local : sw_attr_rdata_fe_fifo;
 
 slink_attributes #(
-  .NUM_TX_LANES_CLOG2    ( $clog2(NUM_TX_LANES)         ),
-  .NUM_RX_LANES_CLOG2    ( $clog2(NUM_RX_LANES)         )
+  .NUM_TX_LANES_CLOG2    ( START_IN_ONE_LANE ? 0 : $clog2(NUM_TX_LANES)         ),
+  .NUM_RX_LANES_CLOG2    ( START_IN_ONE_LANE ? 0 : $clog2(NUM_RX_LANES)         ),
+  .P1_TS1_TX_RESET       ( P1_TS1_TX_RESET              ), 
+  .P1_TS1_RX_RESET       ( P1_TS1_RX_RESET              ), 
+  .P1_TS2_TX_RESET       ( P1_TS2_TX_RESET              ), 
+  .P1_TS2_RX_RESET       ( P1_TS2_RX_RESET              ), 
+
+  .P2_TS1_TX_RESET       ( P2_TS1_TX_RESET              ), 
+  .P2_TS1_RX_RESET       ( P2_TS1_RX_RESET              ), 
+  .P2_TS2_TX_RESET       ( P2_TS2_TX_RESET              ), 
+  .P2_TS2_RX_RESET       ( P2_TS2_RX_RESET              ), 
+
+  .P3R_TS1_TX_RESET      ( P3R_TS1_TX_RESET             ), 
+  .P3R_TS1_RX_RESET      ( P3R_TS1_RX_RESET             ), 
+  .P3R_TS2_TX_RESET      ( P3R_TS2_TX_RESET             ), 
+  .P3R_TS2_RX_RESET      ( P3R_TS2_RX_RESET             ), 
+  .PX_CLK_TRAIL_RESET    ( PX_CLK_TRAIL_RESET           ),
+  .SYNC_FREQ_RESET       ( SYNC_FREQ_RESET              ) 
 ) u_slink_attributes (            
   .attr_max_txs          (                              ),     
   .attr_max_rxs          (                              ),     

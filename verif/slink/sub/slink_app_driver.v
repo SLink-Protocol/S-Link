@@ -120,7 +120,7 @@ task sendRandomShortPacket;
   bit [ 7: 0] di;
   bit [15: 0] wc;
   
-  di = 'ha + {$urandom} % ('h1f - 'ha);
+  di = 'h2 + {$urandom} % ('h2f - 'h2);
   wc = $urandom;
   sendShortPacket(di, wc);
 endtask
@@ -139,7 +139,7 @@ task sendRandomLongPacket(input bit random_data=1);
   bit [ 7: 0] di;
   bit [15: 0] wc;
   
-  di = 'h20 + {$urandom} % ('h3f - 'h20);
+  di = 'h30 + {$urandom} % ('hef - 'h30);
   wc = 1 + {$urandom} % (1024 - 1);      //NEED TO FIX THE 0 BYTE PAYLOAD
   //wc = 1 + {$urandom} % (20 - 1);      //NEED TO FIX THE 0 BYTE PAYLOAD
   sendLongPacket(di, wc, random_data);
@@ -154,7 +154,7 @@ sendShortPacket
 * ``input bit[15:0] wc`` - Word Count/Payload for this packet
 
 SendShortPacket will handle the sending of the desired short packet on the S-Link 
-interface. If a data ID of >= 0x20 is attempted, it will error. The dataid, and payload
+interface. If a data ID of >= 0x30 is attempted, it will error. The dataid, and payload
 are send to the monitor for checking reception.
 
 .rst_end
@@ -164,8 +164,8 @@ task sendShortPacket(input bit[7:0] dataid, input bit[15:0] wc);
   
   `sim_info($display("Starting Short Packet Send with DI: %2h and WC: %4h", dataid, wc))
   
-  if(dataid >= 'h20) begin
-    `sim_error($display("DATA ID should be 0x0 <-> 0x1F. Not sending this packet"))
+  if(dataid >= 'h30) begin
+    `sim_error($display("DATA ID should be 0x0 <-> 0x2F. Not sending this packet"))
   end else begin
   
     @(posedge link_clk);
@@ -203,7 +203,7 @@ sendLongPacket
 * ``input bit random_data`` - 1: Random data is send for each byte 0: byte data is a counter
 
 sendLongPacket will handle the sending of the desired long packet on the S-Link 
-interface. If a data ID of < 0x20 is attempted, it will error. The dataid, wc, and payload
+interface. If a data ID of < 0x30 is attempted, it will error. The dataid, wc, and payload
 are send to the monitor for checking reception.
 
 Payload data is created based on the word count. The user can send random data for each byte by 
@@ -227,8 +227,8 @@ task sendLongPacket(input bit [7:0] dataid, input bit [15:0] wc, input bit rando
   
   `sim_info($display("Starting Long Packet Send with DI: %2h and WC: %4h", dataid, wc))
   
-  if(dataid < 'h20) begin
-    `sim_error($display("DATA ID should be > 0x1F. Not sending this packet"))
+  if(dataid < 'h30) begin
+    `sim_error($display("DATA ID should be > 0x2F. Not sending this packet"))
   end else begin
   
     //push to monitor for check
