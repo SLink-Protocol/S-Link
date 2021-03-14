@@ -256,54 +256,54 @@ always @(*) begin
   if(DATA_WIDTH == 32) begin
     aligned_data_index_check_valid          = 1'b1;
     case({enable, aligned_data_index_check})
-      'h0_0000_0000 : begin 
+      33'h0_0000_0000 : begin 
         aligned_data_index_in               = 'd0;
         aligned_data_index_check_valid      = 1'b0;
       end
-      'h1_0000_0000 : begin
+      33'h1_0000_0000 : begin
         aligned_data_index_in               = aligned_data_index;
         aligned_data_index_check_valid      = 1'b0;
       end
 
-      'h1_0000_0001 : aligned_data_index_in = 'd0;
-      'h1_0000_0002 : aligned_data_index_in = 'd1;
-      'h1_0000_0004 : aligned_data_index_in = 'd2;
-      'h1_0000_0008 : aligned_data_index_in = 'd3;
+      33'h1_0000_0001 : aligned_data_index_in = 'd0;
+      33'h1_0000_0002 : aligned_data_index_in = 'd1;
+      33'h1_0000_0004 : aligned_data_index_in = 'd2;
+      33'h1_0000_0008 : aligned_data_index_in = 'd3;
 
-      'h1_0000_0010 : aligned_data_index_in = 'd4;
-      'h1_0000_0020 : aligned_data_index_in = 'd5;
-      'h1_0000_0040 : aligned_data_index_in = 'd6;
-      'h1_0000_0080 : aligned_data_index_in = 'd7;
+      33'h1_0000_0010 : aligned_data_index_in = 'd4;
+      33'h1_0000_0020 : aligned_data_index_in = 'd5;
+      33'h1_0000_0040 : aligned_data_index_in = 'd6;
+      33'h1_0000_0080 : aligned_data_index_in = 'd7;
 
-      'h1_0000_0100 : aligned_data_index_in = 'd8;
-      'h1_0000_0200 : aligned_data_index_in = 'd9;
-      'h1_0000_0400 : aligned_data_index_in = 'd10;
-      'h1_0000_0800 : aligned_data_index_in = 'd11;
+      33'h1_0000_0100 : aligned_data_index_in = 'd8;
+      33'h1_0000_0200 : aligned_data_index_in = 'd9;
+      33'h1_0000_0400 : aligned_data_index_in = 'd10;
+      33'h1_0000_0800 : aligned_data_index_in = 'd11;
 
-      'h1_0000_1000 : aligned_data_index_in = 'd12;
-      'h1_0000_2000 : aligned_data_index_in = 'd13;
-      'h1_0000_4000 : aligned_data_index_in = 'd14;
-      'h1_0000_8000 : aligned_data_index_in = 'd15;
+      33'h1_0000_1000 : aligned_data_index_in = 'd12;
+      33'h1_0000_2000 : aligned_data_index_in = 'd13;
+      33'h1_0000_4000 : aligned_data_index_in = 'd14;
+      33'h1_0000_8000 : aligned_data_index_in = 'd15;
 
-      'h1_0001_0000 : aligned_data_index_in = 'd16;
-      'h1_0002_0000 : aligned_data_index_in = 'd17;
-      'h1_0004_0000 : aligned_data_index_in = 'd18;
-      'h1_0008_0000 : aligned_data_index_in = 'd19;
+      33'h1_0001_0000 : aligned_data_index_in = 'd16;
+      33'h1_0002_0000 : aligned_data_index_in = 'd17;
+      33'h1_0004_0000 : aligned_data_index_in = 'd18;
+      33'h1_0008_0000 : aligned_data_index_in = 'd19;
 
-      'h1_0010_0000 : aligned_data_index_in = 'd20;
-      'h1_0020_0000 : aligned_data_index_in = 'd21;
-      'h1_0040_0000 : aligned_data_index_in = 'd22;
-      'h1_0080_0000 : aligned_data_index_in = 'd23;
+      33'h1_0010_0000 : aligned_data_index_in = 'd20;
+      33'h1_0020_0000 : aligned_data_index_in = 'd21;
+      33'h1_0040_0000 : aligned_data_index_in = 'd22;
+      33'h1_0080_0000 : aligned_data_index_in = 'd23;
 
-      'h1_0100_0000 : aligned_data_index_in = 'd24;
-      'h1_0200_0000 : aligned_data_index_in = 'd25;
-      'h1_0400_0000 : aligned_data_index_in = 'd26;
-      'h1_0800_0000 : aligned_data_index_in = 'd27;
+      33'h1_0100_0000 : aligned_data_index_in = 'd24;
+      33'h1_0200_0000 : aligned_data_index_in = 'd25;
+      33'h1_0400_0000 : aligned_data_index_in = 'd26;
+      33'h1_0800_0000 : aligned_data_index_in = 'd27;
 
-      'h1_1000_0000 : aligned_data_index_in = 'd28;
-      'h1_2000_0000 : aligned_data_index_in = 'd29;
-      'h1_4000_0000 : aligned_data_index_in = 'd30;
-      'h1_8000_0000 : aligned_data_index_in = 'd31;
+      33'h1_1000_0000 : aligned_data_index_in = 'd28;
+      33'h1_2000_0000 : aligned_data_index_in = 'd29;
+      33'h1_4000_0000 : aligned_data_index_in = 'd30;
+      33'h1_8000_0000 : aligned_data_index_in = 'd31;
 
       default       : begin
         aligned_data_index_in               = 'd0;

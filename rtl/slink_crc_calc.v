@@ -19,17 +19,18 @@ module slink_crc_8_16bit_compute(
 
 wire  [15:0] crc_in16;
 wire  [15:0] crc_in8;
+reg   [15:0] crc_in8_xfix;
 
 always @(posedge clk or posedge reset) begin
   if(reset) begin
     crc       <= 16'hffff;
   end else begin
     crc       <= init   ? 16'hffff : 
-                 valid  ? crc_in8  : crc;
+                 valid  ? crc_in8_xfix  : crc;
   end
 end
 
-assign crc_next = valid ? crc_in8  : 16'hffff;
+assign crc_next = valid ? crc_in8_xfix  : 16'hffff;
 
 
 //Can this be more optimzed?
@@ -50,6 +51,17 @@ assign crc_in8[ 2] = data_in[6] ^ data_in[2] ^ crc_prev[2] ^ crc_prev[6] ^ crc_p
 assign crc_in8[ 1] = data_in[5] ^ data_in[1] ^ crc_prev[1] ^ crc_prev[5] ^ crc_prev[9];
 assign crc_in8[ 0] = data_in[4] ^ data_in[0] ^ crc_prev[0] ^ crc_prev[4] ^ crc_prev[8];
 
+
+always @(*) begin
+  crc_in8_xfix  = crc_in8;
+  `ifndef SYNTHESIS
+  for(int jj=0; jj < 16; jj++) begin
+    if(crc_in8[jj] === 1'bx) begin
+      crc_in8_xfix[jj] = 1'b0;
+    end
+  end
+  `endif
+end
 
 endmodule
 

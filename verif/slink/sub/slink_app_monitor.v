@@ -63,7 +63,7 @@ task monitorIntf;
     if(~disable_monitor) begin
       if(rx_sop && rx_valid) begin
         //SOP
-        if(rx_data_id <= 'h1f) begin
+        if(rx_data_id <= 'h2f) begin
           //Short Packet
           `sim_info($display("Short packet Received ID: %2h WC: %4h", rx_data_id, rx_word_count))
           checkByte(rx_data_id);

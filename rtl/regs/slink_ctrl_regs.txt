@@ -1,0 +1,97 @@
+########################################
+# S-Link Registers
+########################################
+
+SWRESET                             RW                    
+  swreset                           1'b1                    Main reset. Must be cleared prior to operation. 
+  swreset_mux                       1'b0                    0 - Use logic, 1 - Use register
+
+ENABLE                              RW
+  enable                            1'b0                    Main enable. Must be set prior to operation. Any configurations should be performed prior to enabling.
+  enable_mux                        1'b0                    0 - Use logic, 1 - Use register
+
+INTERRUPT_STATUS                    RO                      
+  ecc_corrupted                     1'b0        W1C         Indicates that a packet header was received with the ECC corrupted.
+  ecc_corrected                     1'b0        W1C         Indicates that a packet header was received with the ECC corrected.
+  crc_corrupted                     1'b0        W1C         Indicates that a long packet was received and the received CRC did not match the calculated CRC based on the payload.
+  reset_seen                        1'b0        W1C         Indicates a reset condition was seen
+  wake_seen                         1'b0        W1C         Indicates a wake condition was seen
+  in_pstate                         1'b0        W1C         Indicates the link has entered into a P state (only asserts on entry)
+
+INTERRUPT_ENABLE                    RW
+  ecc_corrupted_int_en              1'b1                    Enables the ecc_corrupted interrupt
+  ecc_corrected_int_en              1'b1                    Enables the ecc_corrected interrupt
+  crc_corrupted_int_en              1'b1                    Enables the crc_corrupted interrupt
+  reset_seen_int_en                 1'b1                    Enables the reset_seen interrupt
+  wake_seen_int_en                  1'b0                    Enables the wake_seen interrupt
+  in_pstate_int_en                  1'b0                    Enables the in_pstate interrupt
+
+
+PSTATE_CONTROL                      RW
+  p1_state_enter                    1'b0                    Set to enter P1 power state
+  p2_state_enter                    1'b0                    Set to enter P2 power state
+  p3_state_enter                    1'b0                    Set to enter P3 power state
+  reserved                          27'd0
+  link_reset                        1'b0                    Forces the link to the reset state for both sides of the link
+  link_wake                         1'b0                    Forces the link to wake up to P0 without a packet being available
+
+
+ERROR_CONTROL                       RW
+  allow_ecc_corrected               1'b1                    1 - ECC Corrected conditions will not block the Packet Header from going to the application layer
+  ecc_corrected_causes_reset        1'b0                    1 - ECC Corrected will cause S-Link to reset. This should not be set if allow_ecc_corrected is set
+  ecc_corrupted_causes_reset        1'b1                    1 - ECC Corrupted condition will cause S-Link to reset.
+  crc_corrupted_causes_reset        1'b0                    1 - CRC Corrupted condition will cause S-Link to reset.
+
+COUNT_VAL_1US                       RW
+  count_val_1us                     10'd38                  Number of REFCLK cycles that equal 1us.
+
+
+SHORT_PACKET_MAX                    RW
+  short_packet_max                  8'h2f                   This setting allows you to change the window for short/long packets
+
+######################
+# Attribute Override
+#
+# Attribute overrides are meant to be used to configure S-Link prior to initial start.
+#
+# A user would go through updating the shadow values then forcing a
+#
+# It is possible that a user could update attributes during a low power mode, but this 
+# should be done on **both** sides of the link. i.e. you use some other side band channel
+# to communicate the changes. Do this at your own risk.
+######################
+SW_ATTR_ADDR_DATA                   RW
+  sw_attr_addr                      16'd0                   Address for software based attribute updates
+  sw_attr_wdata                     16'd0                   Data for software based attribute updates
+
+SW_ATTR_CONTROLS                    RW
+  sw_attr_write                     1'b1                    0 - Perform a read command. 1 - Perform a write command
+  sw_attr_local                     1'b1                    0 - Write/Read to far end SLink. 1 - Write/Read to local SLink
+
+SW_ATTR_DATA_READ                   RO
+  sw_attr_rdata                     16'd0       RFIFO       Shadow attribute data based on the sw_attr_addr value. *The sw_attr_data_read is actually only the link_clk, so it is advised to set the sw_attr_addr for several cycles prior to reading*
+
+SW_ATTR_FIFO_STATUS                 RO
+  sw_attr_send_fifo_full            1'b0
+  sw_attr_send_fifo_empty           1'b0
+  sw_attr_recv_fifo_full            1'b0
+  sw_attr_recv_fifo_empty           1'b0
+
+SW_ATTR_SHADOW_UPDATE               RW
+  sw_attr_shadow_update             1'b0        WFIFO       Write a 1 to update the current sw_attr_addr with the current sw_attr_data. If set to local, this will handle a local write, else will create a transation to the other side
+
+SW_ATTR_EFFECTIVE_UPDATE            RW
+  sw_attr_effective_update          1'b0        WFIFO       Write a 1 to set the shadow attribute values to the effective values. This should only be used prior to removing swreset for initial config.
+
+
+
+######################
+# S-Link Debug Status
+######################
+STATE_STATUS                        RO
+  ltssm_state                       5'd0                    LTSSM State
+  reserved                          3'd0
+  ll_tx_state                       4'd0                    LL TX State
+  ll_rx_state                       4'd0                    LL RX State
+  deskew_state                      2'd0                    Deskew State
+  

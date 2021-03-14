@@ -99,7 +99,6 @@ genvar laneindex;
 generate
   for(laneindex = 0; laneindex < NUM_LANES; laneindex = laneindex + 1) begin : gen_block_align
     
-    
     wire        enable_local;
     wire        blockalign_local;
     wire        lane_is_active;
@@ -137,45 +136,54 @@ generate
       .locked              ( locked[laneindex]                                                  )); 
 
     
-    wire rempty;
     
-    //NEED TO SEE HOW WE CLEAR THIS FIFO AFTER INACTIVE
+    if(RETIME_FIFO_DEPTH > 0) begin : gen_retime_fifo
     
-    assign rx_locked_retime[laneindex] = ~rempty;
-    
-    slink_fifo_top #(
-      //parameters
-      .DATA_SIZE          ( DATA_WIDTH + 2 + 1 + 1 ), //DATA_WIDTH + SyncHeader + DataValid + Startblock
-      .ADDR_SIZE          ( RETIME_FIFO_DEPTH      )
-    ) u_retime_fifo (
-      .wclk                ( rxclk[laneindex]                   ),             
-      .wreset              ( rxclk_reset[laneindex]             ),             
-      .winc                ( locked[laneindex]                  ),  //do we need other gates?
-                    
-      .rclk                ( clk                                ),  
-      .rreset              ( reset                              ),           
-      .rinc                ( ~rempty                            ),  //need anything else? 
-           
-      .wdata               ( {rx_datavalid[laneindex],
-                              rx_startblock[laneindex],
-                              rx_syncheader[((laneindex+1)*2)-1:laneindex*2],
-                              rx_data_aligned[((laneindex+1)*DATA_WIDTH)-1:laneindex*DATA_WIDTH]}                  ),  
-      .rdata               ( {rx_datavalid_retime[laneindex],
-                              rx_startblock_retime[laneindex],
-                              rx_syncheader_retime[((laneindex+1)*2)-1:laneindex*2],
-                              rx_data_aligned_retime[((laneindex+1)*DATA_WIDTH)-1:laneindex*DATA_WIDTH]}           ),  
-      .wfull               (                                    ),  
-      .rempty              ( rempty                             ),  
-      .rbin_ptr            (                                    ),  
-      .rdiff               (                                    ),  
-      .wbin_ptr            (                                    ),  
-      .wdiff               (                                    ),  
-      .swi_almost_empty    ( {{RETIME_FIFO_DEPTH-1{1'b0}}, 1'b1}),          
-      .swi_almost_full     ( {{RETIME_FIFO_DEPTH-1{1'b1}}, 1'b0}),          
-      .half_full           (                                    ),  
-      .almost_empty        (                                    ),  
-      .almost_full         (                                    )); 
+      wire rempty;
+      assign rx_locked_retime[laneindex] = ~rempty;
 
+      slink_fifo_top #(
+        //parameters
+        .DATA_SIZE          ( DATA_WIDTH + 2 + 1 + 1 ), //DATA_WIDTH + SyncHeader + DataValid + Startblock
+        .ADDR_SIZE          ( RETIME_FIFO_DEPTH      )
+      ) u_retime_fifo (
+        .wclk                ( rxclk[laneindex]                   ),             
+        .wreset              ( rxclk_reset[laneindex]             ),             
+        .winc                ( locked[laneindex]                  ),  //do we need other gates?
+
+        .rclk                ( clk                                ),  
+        .rreset              ( reset                              ),           
+        .rinc                ( ~rempty                            ),  //need anything else? 
+
+        .wdata               ( {rx_datavalid[laneindex],
+                                rx_startblock[laneindex],
+                                rx_syncheader[((laneindex+1)*2)-1:laneindex*2],
+                                rx_data_aligned[((laneindex+1)*DATA_WIDTH)-1:laneindex*DATA_WIDTH]}                  ),  
+        .rdata               ( {rx_datavalid_retime[laneindex],
+                                rx_startblock_retime[laneindex],
+                                rx_syncheader_retime[((laneindex+1)*2)-1:laneindex*2],
+                                rx_data_aligned_retime[((laneindex+1)*DATA_WIDTH)-1:laneindex*DATA_WIDTH]}           ),  
+        .wfull               (                                    ),  
+        .rempty              ( rempty                             ),  
+        .rbin_ptr            (                                    ),  
+        .rdiff               (                                    ),  
+        .wbin_ptr            (                                    ),  
+        .wdiff               (                                    ),  
+        .swi_almost_empty    ( {{RETIME_FIFO_DEPTH-1{1'b0}}, 1'b1}),          
+        .swi_almost_full     ( {{RETIME_FIFO_DEPTH-1{1'b1}}, 1'b0}),          
+        .half_full           (                                    ),  
+        .almost_empty        (                                    ),  
+        .almost_full         (                                    )); 
+        
+    end else begin : gen_no_retime_fifo
+    
+      assign rx_locked_retime[laneindex]                                               = locked[laneindex];
+      assign rx_datavalid_retime[laneindex]                                            = rx_datavalid[laneindex];
+      assign rx_startblock_retime[laneindex]                                           = rx_startblock[laneindex];
+      assign rx_syncheader_retime[((laneindex+1)*2)-1:laneindex*2]                     = rx_syncheader[((laneindex+1)*2)-1:laneindex*2];
+      assign rx_data_aligned_retime[((laneindex+1)*DATA_WIDTH)-1:laneindex*DATA_WIDTH] = rx_data_aligned[((laneindex+1)*DATA_WIDTH)-1:laneindex*DATA_WIDTH];
+      
+    end
   end
 endgenerate
 
