@@ -64,10 +64,10 @@ iverilog -g2012 \
 
 if [ -z $regress ] 
 then
-  # Running local -lxt2-speed
+  # Running local 
   
   if test -f "$VVP_FILE"; then
-    vvp -n $log $VVP_FILE +SLINK_TEST=$test $plusargs $nosave 
+    vvp -n $log $VVP_FILE +SLINK_TEST=$test $plusargs $nosave -lxt2-speed
   else
     echo "$VVP_FILE doesn't exists."
   fi
