@@ -148,6 +148,8 @@ slink #(
   .link_clk                    ( mst_link_clk                 ),  
   .link_reset                  ( mst_link_reset               ),  
   
+  .slink_enable                ( ~main_reset                  ),
+  .por_reset                   ( main_reset                   ),
                
   .tx_sop                      ( mst_tx_sop                   ),  
   .tx_data_id                  ( mst_tx_data_id               ),  
@@ -216,6 +218,9 @@ slink #(
   .apb_pslverr                 ( slv_apb_pslverr              ),  
   .link_clk                    ( slv_link_clk                 ),  
   .link_reset                  ( slv_link_reset               ),  
+  
+  .slink_enable                ( ~main_reset                  ),
+  .por_reset                   ( main_reset                   ),
   
   .tx_sop                      ( slv_tx_sop                   ),  
   .tx_data_id                  ( slv_tx_data_id               ),  

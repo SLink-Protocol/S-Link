@@ -92,7 +92,7 @@ sanity_test
 Just brings up the link and send a few packets. Commonly
 used for trying out specific usecases
 .rst_end
-/****************************************/
+****************************************/
 task sanity_test;
   bit [31:0] val;
   int        delay_ns;
@@ -101,20 +101,20 @@ task sanity_test;
   driver_m2s.sendShortPacket('ha, 'h1234);
     
   #10ns;
-  driver_m2s.sendLongPacket('h22, 1);
+  driver_m2s.sendLongPacket('h32, 1);
   #10ns;
-  driver_m2s.sendLongPacket('h22, 2);
+  driver_m2s.sendLongPacket('h32, 2);
   #10ns;
-  driver_m2s.sendLongPacket('h22, 3);
+  driver_m2s.sendLongPacket('h32, 3);
   #10ns;
-  driver_m2s.sendLongPacket('h22, 4);
+  driver_m2s.sendLongPacket('h32, 4);
   #10ns;
-  driver_m2s.sendLongPacket('h22, 5);
+  driver_m2s.sendLongPacket('h32, 5);
   
   #10ns;
-  driver_m2s.sendLongPacket('h22, 16);
-  driver_m2s.sendLongPacket('h22, 17);
-  driver_m2s.sendLongPacket('h22, 18);
+  driver_m2s.sendLongPacket('h32, 16);
+  driver_m2s.sendLongPacket('h32, 17);
+  driver_m2s.sendLongPacket('h32, 18);
   
   driver_m2s.write_local_attr  (ATTR_P1_TS1_TX, 4);
   driver_m2s.write_local_attr  (ATTR_P1_TS1_TX, 4);
@@ -128,7 +128,7 @@ task sanity_test;
   
   #10ns;
   for(int i = 1; i < 53; i++) begin
-    driver_m2s.sendLongPacket('h22, i);
+    driver_m2s.sendLongPacket('h32, i);
     #1ps;
   end
   
@@ -142,7 +142,7 @@ pstate_sanity
 +++++++++++++
 Sends some packets and goes into each P state
 .rst_end
-/*****************************************/
+*****************************************/
 task pstate_sanity;
   `sim_info($display("P-State Sanity"))
   driver_m2s.sendShortPacket('ha, 'h1234);
@@ -201,7 +201,7 @@ random_packets
 ++++++++++++++
 Brings up the link and sends a random number of packets
 .rst_end
-/*****************************************/
+*****************************************/
 task random_packets;
 
   `sim_info($display("Starting random_packets"))
@@ -244,7 +244,7 @@ link_width_change
 - Go to lower P1 state
 - wakeup and send some random packets
 .rst_end
-/*****************************************/
+*****************************************/
 task link_width_change;
 
   int tx_lanes_rand;
@@ -329,7 +329,7 @@ slink_force_reset
 Bring up slink and force a reset through SW. Wake link
 back up and see if we can send packets again
 .rst_end
-/*****************************************/
+*****************************************/
 task slink_force_reset;
   
   fork
@@ -370,7 +370,7 @@ slink_force_hard_reset
 - Read those attributes to see if they are back to defaults
 - Wake up link and send some packets
 .rst_end
-/*****************************************/
+*****************************************/
 task slink_force_hard_reset;
   bit [31:0] val;
   
@@ -512,7 +512,7 @@ Corrupts one of the Packet Header, looks to see if this error
 was seen in the monitor. The receiving side should have receieved the
 packet with no errors since one bit error should be resolvable.
 .rst_end
-/*****************************************/
+*****************************************/
 task ecc_correction;
   reg [(NUM_TX_LANES*MST_PHY_DATA_WIDTH)-1:0] bit_corrupt;
   
@@ -556,7 +556,7 @@ Corrupts two bits of the Packet Header, looks to see if this error
 was seen in the monitor. Allows the link to reset then checks to 
 see if a valid packet can be sent to indicate recovery.
 .rst_end
-/*****************************************/
+*****************************************/
 task ecc_corruption;
   reg [(NUM_TX_LANES*MST_PHY_DATA_WIDTH)-1:0] bit_corrupt;
   

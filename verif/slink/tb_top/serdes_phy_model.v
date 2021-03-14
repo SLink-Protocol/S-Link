@@ -10,7 +10,7 @@
 //--------------------------------------------
 module serdes_clk_model #(
   parameter IS_MASTER   = 1,
-  parameter CLK_PER_NS  = 0.0625
+  parameter real CLK_PER_NS  = 0.0625
 ) (
   input  wire   enable,
   input  wire   idle,

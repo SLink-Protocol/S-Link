@@ -45,7 +45,7 @@ iverilog -g2012 \
   $SLINK_TOP/rtl/*.v \
   $SLINK_TOP/rtl/bist/*.v \
   $SLINK_TOP/rtl/serdes/*.v \
-  $SLINK_TOP/rtl/tech/*.v \
+  $SLINK_TOP/rtl/tech/slink_tech_lib.v \
   $SLINK_TOP/verif/slink/sub/slink_cfg.v \
   $SLINK_TOP/verif/slink/tb_top/slink_tb_top.v \
   $SLINK_TOP/verif/slink/tb_top/serdes_phy_model.v \
@@ -64,10 +64,10 @@ iverilog -g2012 \
 
 if [ -z $regress ] 
 then
-  # Running local
+  # Running local -lxt2-speed
   
   if test -f "$VVP_FILE"; then
-    vvp -n $log $VVP_FILE +SLINK_TEST=$test $plusargs $nosave -lxt2-speed
+    vvp -n $log $VVP_FILE +SLINK_TEST=$test $plusargs $nosave 
   else
     echo "$VVP_FILE doesn't exists."
   fi
