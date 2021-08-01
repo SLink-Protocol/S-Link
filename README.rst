@@ -1,3 +1,9 @@
+Now Maintained by @waviousllc
+=============================
+For the forseeable future, all development will take place on the waviousllc fork of this repo. S-Link was used on several projects at Wavious, so it made sense to fork it under the Wavious account. This repo will be monitored, however any issues or code updates should be done at the wav-slink-hw repo.
+https://github.com/waviousllc/wav-slink-hw
+
+
 .. figure :: docs/source/slink_logo_white.png
   :align:    center
 
